@@ -1,0 +1,26 @@
+import urllib.request
+import json
+import sys
+
+url = "https://juynjxvxowfvvdyhvhgv.supabase.co/rest/v1/products?select=*"
+apikey = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imp1eW5qeHZ4b3dmdnZkeWh2aGd2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE4MjIzMjMsImV4cCI6MjA5NzM5ODMyM30.cVzEGJyBKs_MoxBijohhmpgjVt48qw8oBxl8i51lB9k"
+jwt = "eyJhbGciOiJFUzI1NiIsImtpZCI6IjlhOTRkYjMyLTkwNTUtNDcyOS1hZWZhLTFhYjM1OWYxNzMwNyIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJodHRwczovL2p1eW5qeHZ4b3dmdnZkeWh2aGd2LnN1cGFiYXNlLmNvL2F1dGgvdjEiLCJzdWIiOiIyZmM5MWI0Yy1mODY0LTQ0ZjMtODhiMS1iMzM4NTQxYzRiMGMiLCJhdWQiOiJhdXRoZW50aWNhdGVkIiwiZXhwIjoxNzgyMjE4ODExLCJpYXQiOjE3ODIyMTUyMTEsImVtYWlsIjoidGVzdF9jb25maXJtZWRfanVuMjNAZ21haWwuY29tIiwicGhvbmUiOiIiLCJhcHBfbWV0YWRhdGEiOnsicHJvdmlkZXIiOiJlbWFpbCIsInByb3ZpZGVycyI6WyJlbWFpbCJdfSwidXNlcl9tZXRhZGF0YSI6eyJlbWFpbCI6InRlc3RfY29uZmlybWVkX2p1bjIzQGdtYWlsLmNvbSIsImVtYWlsX3ZlcmlmaWVkIjp0cnVlLCJmdWxsX25hbWUiOiJEZWJ1ZyBUZXN0IiwicGhvbmVfdmVyaWZpZWQiOmZhbHNlLCJzaG9wX25hbWUiOiJEZWJ1ZyBTaG9wIiwic3ViIjoiMmZjOTFiNGMtZjg2NC00NGYzLTg4YjEtYjMzODU0MWM0YjBjIn0sInJvbGUiOiJhdXRoZW50aWNhdGVkIiwiYWFsIjoiYWFsMSIsImFtciI6W3sibWV0aG9kIjoicGFzc3dvcmQiLCJ0aW1lc3RhbXAiOjE3ODIyMTUyMTEsImVtYWlsX2NvbmZpcm1lZF9hdCI6IjIwMjYtMDYtMjNUMTE6NDY6NTEuNTg4OTE0MjA2WiIsInBob25lIjoiIiwibGFzdF9zaWduX2luX2F0IjoiMjAyNi0wNi0yM1QxMTo0Njo1MS41OTM4MDUzNDRaIiwiYXBwX21ldGFkYXRhIjp7InByb3ZpZGVyIjoiZW1haWwiLCJwcm92aWRlcnMiOlsiZW1haWwiXX0sInVzZXJfbWV0YWRhdGEiOnsiZW1haWwiOiJ0ZXN0X2NvbmZpcm1lZF9qdW4yM0BnbWFpbC5jb20iLCJlbWFpbF92ZXJpZmllZCI6dHJ1ZSwiZnVsbF9uYW1lIjoiRGVidWcgVGVzdCIsInBob25lX3ZlcmlmaWVkIjpmYWxzZSwic2hvcF9uYW1lIjoiRGVidWcgU2hvcCIsInN1YiI6IjJmYzkxYjRjLWY4NjQtNDRjMy04OGIxLWIzMzg1NDFjNGIwYyJ9LCJyb2xlIjoiYXV0aGVudGljYXRlZCIsImFhbCI6ImFhbDEiLCJhbXIiOlt7Im1ldGhvZCI6InBhc3N3b3JkIiwidGltZXN0YW1wIjoxNzgyMjE1MjExfV0sInNlc3Npb25faWQiOiI5MGI5Nzc2My05MDBhLTQwODEtODFlYi01OWM3ZWFlZTBhYjEiLCJpc19hbm9ueW1vdXMiOmZhbHNlfQ.2199_h_dq-yaJ4SOQU8cX5siRAj5CDpqJty3s9Vkpfg8-NJBy4eWFf9B9FYR4bf0u2ny3I_C0lm-ANyXba7hlg"
+
+req = urllib.request.Request(
+    url,
+    headers={
+        "apikey": apikey,
+        "Authorization": f"Bearer {jwt}",
+        "Content-Type": "application/json"
+    }
+)
+
+try:
+    with urllib.request.urlopen(req) as response:
+        print("STATUS:", response.status)
+        print("BODY:", response.read().decode('utf-8'))
+except urllib.error.HTTPError as e:
+    print("HTTP ERROR:", e.code)
+    print("BODY:", e.read().decode('utf-8'))
+except Exception as e:
+    print("ERROR:", e)
