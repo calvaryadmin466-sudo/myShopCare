@@ -286,9 +286,34 @@ export default function POS() {
               </>
             )}
 
-            <button className="btn btn-primary btn-full btn-lg" style={{ marginTop: 16, display: 'inline-flex !important', alignItems: 'center', justifyContent: 'center', width: '100%', minHeight: '48px', fontSize: '1rem', fontWeight: 600, padding: '12px 24px', visibility: 'visible !important', opacity: cart.length === 0 ? 0.5 : 1 }} onClick={processSale} disabled={cart.length === 0 || processing}>
-              {processing ? t('loading') : `✓ ${t('process_sale')}`}
-            </button>
+            <div style={{ marginTop: 16, padding: '12px 0', borderTop: '1px solid var(--border)' }}>
+              <button 
+                className="btn btn-primary btn-full btn-lg" 
+                style={{ 
+                  display: 'flex !important', 
+                  alignItems: 'center', 
+                  justifyContent: 'center', 
+                  width: '100%', 
+                  minHeight: '52px', 
+                  fontSize: '1.05rem', 
+                  fontWeight: 700, 
+                  padding: '14px 24px',
+                  visibility: 'visible !important',
+                  opacity: cart.length === 0 ? 0.5 : 1,
+                  cursor: cart.length === 0 ? 'not-allowed' : 'pointer',
+                  backgroundColor: 'var(--accent)',
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: 'var(--radius)',
+                  position: 'relative',
+                  zIndex: 100
+                }} 
+                onClick={processSale} 
+                disabled={cart.length === 0 || processing}
+              >
+                {processing ? t('loading') : `✓ ${t('process_sale')}`}
+              </button>
+            </div>
           </div>
         </div>
       </div>
