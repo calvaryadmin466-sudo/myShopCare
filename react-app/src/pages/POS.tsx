@@ -286,27 +286,29 @@ export default function POS() {
               </>
             )}
 
-            <div style={{ marginTop: 16, padding: '12px 0', borderTop: '1px solid var(--border)' }}>
+            <div style={{ marginTop: 16, padding: '12px 0', borderTop: '1px solid var(--border)', position: 'relative', zIndex: 1000 }}>
               <button 
+                type="button"
                 className="btn btn-primary btn-full btn-lg" 
                 style={{ 
-                  display: 'flex !important', 
+                  display: 'flex', 
                   alignItems: 'center', 
                   justifyContent: 'center', 
                   width: '100%', 
-                  minHeight: '52px', 
-                  fontSize: '1.05rem', 
+                  height: '56px', 
+                  fontSize: '1.1rem', 
                   fontWeight: 700, 
                   padding: '14px 24px',
-                  visibility: 'visible !important',
-                  opacity: cart.length === 0 ? 0.5 : 1,
+                  visibility: 'visible',
+                  opacity: 1,
                   cursor: cart.length === 0 ? 'not-allowed' : 'pointer',
-                  backgroundColor: 'var(--accent)',
+                  backgroundColor: cart.length === 0 ? '#ccc' : 'var(--accent)',
                   color: 'white',
                   border: 'none',
                   borderRadius: 'var(--radius)',
                   position: 'relative',
-                  zIndex: 100
+                  zIndex: 1000,
+                  boxShadow: '0 4px 12px rgba(0,0,0,0.15)'
                 }} 
                 onClick={processSale} 
                 disabled={cart.length === 0 || processing}
