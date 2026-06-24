@@ -286,7 +286,7 @@ export default function POS() {
               </>
             )}
 
-            <button className="btn btn-primary btn-full btn-lg" style={{ marginTop: 12 }} onClick={processSale} disabled={cart.length === 0 || processing}>
+            <button className="btn btn-primary btn-full btn-lg" style={{ marginTop: 12, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: '100%' }} onClick={processSale} disabled={cart.length === 0 || processing}>
               {processing ? t('loading') : `✓ ${t('process_sale')}`}
             </button>
           </div>

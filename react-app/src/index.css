@@ -252,7 +252,7 @@ body {
 .btn-sm { padding: 5px 10px; font-size: 0.8rem; }
 .btn-lg { padding: 11px 24px; font-size: 0.95rem; }
 .btn-full { width: 100%; justify-content: center; }
-.btn:disabled { opacity: 0.5; cursor: not-allowed; }
+.btn:disabled { opacity: 0.5; cursor: not-allowed; display: inline-flex !important; }
 
 /* ─── Tables ────────────────────────────────────────────────── */
 .table-wrapper { width: 100%; overflow-x: auto; -webkit-overflow-scrolling: touch; }
