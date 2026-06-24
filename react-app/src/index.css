@@ -345,7 +345,7 @@ tbody tr:last-child { border-bottom: none; }
 /* ─── POS Layout ────────────────────────────────────────────── */
 .pos-layout { display: grid; grid-template-columns: 1fr 340px; gap: 20px; height: calc(100vh - var(--header-h) - 48px); }
 .pos-products { overflow-y: auto; }
-.pos-cart { background: var(--bg2); border: 1px solid var(--border); border-radius: var(--radius-lg); display: flex; flex-direction: column; overflow: hidden; }
+.pos-cart { background: var(--bg2); border: 1px solid var(--border); border-radius: var(--radius-lg); display: flex; flex-direction: column; overflow: visible; }
 .pos-cart-header { padding: 16px 18px; border-bottom: 1px solid var(--border); }
 .pos-cart-items { flex: 1; overflow-y: auto; padding: 10px; }
 .pos-cart-footer { padding: 18px 18px 24px; border-top: 1px solid var(--border); overflow: visible; position: relative; z-index: 1; }
