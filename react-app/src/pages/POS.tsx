@@ -286,7 +286,7 @@ export default function POS() {
               </>
             )}
 
-            <button className="btn btn-primary btn-full btn-lg" style={{ marginTop: 16, display: 'inline-flex !important', alignItems: 'center', justifyContent: 'center', width: '100%', minHeight: '48px', fontSize: '1rem', fontWeight: 600, padding: '12px 24px' }} onClick={processSale} disabled={cart.length === 0 || processing}>
+            <button className="btn btn-primary btn-full btn-lg" style={{ marginTop: 16, display: 'inline-flex !important', alignItems: 'center', justifyContent: 'center', width: '100%', minHeight: '48px', fontSize: '1rem', fontWeight: 600, padding: '12px 24px', visibility: 'visible !important', opacity: cart.length === 0 ? 0.5 : 1 }} onClick={processSale} disabled={cart.length === 0 || processing}>
               {processing ? t('loading') : `✓ ${t('process_sale')}`}
             </button>
           </div>
