@@ -27,13 +27,48 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     // Prevent duplicate concurrent fetches
     if (fetchingRef.current) return
     fetchingRef.current = true
+    console.log('AuthContext: Fetching profile for uid:', uid)
     try {
-      const { data } = await supabase
+      const { data, error } = await supabase
         .from('profiles')
         .select('*')
         .eq('id', uid)
         .maybeSingle()
-      setProfile(data as Profile | null)
+      console.log('AuthContext: Profile data:', data, 'Error:', error)
+      
+      if (error) {
+        console.error('AuthContext: Error fetching profile:', error)
+        setProfile(null)
+      } else if (!data) {
+        console.log('AuthContext: No profile found, creating default profile')
+        // Create default profile if it doesn't exist
+        const { data: userData } = await supabase.auth.getUser()
+        if (userData?.user) {
+          const { data: newProfile, error: insertError } = await supabase
+            .from('profiles')
+            .insert({
+              id: uid,
+              email: userData.user.email || '',
+              full_name: userData.user.user_metadata?.full_name || 'User',
+              shop_name: userData.user.user_metadata?.shop_name || 'My Shop',
+              role: 'owner'
+            })
+            .select()
+            .single()
+          
+          if (insertError) {
+            console.error('AuthContext: Error creating profile:', insertError)
+            setProfile(null)
+          } else {
+            console.log('AuthContext: Created profile:', newProfile)
+            setProfile(newProfile as Profile)
+          }
+        } else {
+          setProfile(null)
+        }
+      } else {
+        setProfile(data as Profile | null)
+      }
     } finally {
       fetchingRef.current = false
       setLoading(false)

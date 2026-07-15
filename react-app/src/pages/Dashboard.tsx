@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef } from 'react'
 import { Link } from 'react-router-dom'
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts'
 import { supabase } from '../lib/supabase'
@@ -41,64 +41,117 @@ export default function Dashboard() {
   const { t } = useLang()
   const [stats, setStats] = useState<Stats | null>(null)
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+  const abortControllerRef = useRef<AbortController | null>(null)
 
-  useEffect(() => { if (profile) loadStats() }, [profile])
+  console.log('Dashboard render - profile:', profile)
+
+  useEffect(() => { 
+    console.log('Dashboard useEffect - profile?.id:', profile?.id, 'profile:', profile)
+    if (profile?.id) {
+      console.log('Dashboard: Calling loadStats')
+      loadStats()
+    } else {
+      console.log('Dashboard: No profile.id, skipping loadStats')
+      // If profile exists but has no id, or profile is null after auth loading completes
+      if (profile === null) {
+        console.log('Dashboard: Profile is null, might not be loaded yet')
+      } else {
+        console.log('Dashboard: Profile exists but no id, setting loading false')
+        setLoading(false)
+        setError('Profile data is incomplete. Please contact support.')
+      }
+    }
+    return () => {
+      abortControllerRef.current?.abort()
+    }
+  }, [profile?.id])
 
   async function loadStats() {
-    if (!profile) return
+    if (!profile?.shop_id) {
+      console.error('Dashboard: profile.shop_id is missing', profile)
+      setError('Shop information not found. Please contact support.')
+      setLoading(false)
+      return
+    }
+    
+    // Cancel previous request if still in flight
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort()
+    }
+    
+    const controller = new AbortController()
+    abortControllerRef.current = controller
+    
     setLoading(true)
-    const shopId = profile.shop_id
-    const today = new Date().toISOString().split('T')[0]
-    const weekAgo = new Date(Date.now() - 7 * 86400000).toISOString().split('T')[0]
+    setError(null)
+    
+    try {
+      const shopId = profile.shop_id
+      const today = new Date().toISOString().split('T')[0]
+      const weekAgo = new Date(Date.now() - 7 * 86400000).toISOString().split('T')[0]
 
-    const [todaySalesRes, productsRes, debtsRes, weekSalesRes, topProductsRes] = await Promise.all([
-      supabase.from('sales').select('id, total').eq('shop_id', shopId).gte('created_at', today),
-      supabase.from('products').select('id, stock_quantity, low_stock_threshold').eq('shop_id', shopId),
-      supabase.from('debts').select('balance').eq('shop_id', shopId).eq('status', 'active'),
-      supabase.from('sales').select('created_at, total').eq('shop_id', shopId).gte('created_at', weekAgo).order('created_at'),
-      supabase.from('sale_items')
-        .select('product_name, quantity, total_price, sale_id, sales!inner(shop_id)')
-        .eq('sales.shop_id', shopId)
-        .limit(200),
-    ])
+      const [todaySalesRes, productsRes, debtsRes, weekSalesRes, topProductsRes] = await Promise.all([
+        supabase.from('sales').select('id, total').eq('shop_id', shopId).gte('created_at', today),
+        supabase.from('products').select('id, stock_quantity, low_stock_threshold').eq('shop_id', shopId),
+        supabase.from('debts').select('balance').eq('shop_id', shopId).eq('status', 'active'),
+        supabase.from('sales').select('created_at, total').eq('shop_id', shopId).gte('created_at', weekAgo).order('created_at'),
+        supabase.from('sale_items')
+          .select('product_name, quantity, total_price, sale_id, sales!inner(shop_id)')
+          .eq('sales.shop_id', shopId)
+          .limit(200),
+      ])
 
-    const todaySalesData = todaySalesRes.data || []
-    const todaySales = todaySalesData.reduce((s, r) => s + Number(r.total), 0)
-    const todayTx = todaySalesData.length
-    const products = productsRes.data || []
-    const lowStock = products.filter(p => p.stock_quantity <= p.low_stock_threshold).length
-    const debtors = debtsRes.data || []
-    const totalDebt = debtors.reduce((s, d) => s + Number(d.balance), 0)
+      // Check if request was aborted
+      if (controller.signal.aborted) return
 
-    // Group week sales by date
-    const byDate: Record<string, number> = {}
-    for (let i = 6; i >= 0; i--) {
-      const d = new Date(Date.now() - i * 86400000).toISOString().split('T')[0]
-      byDate[d] = 0
+      const todaySalesData = todaySalesRes.data || []
+      const todaySales = todaySalesData.reduce((s, r) => s + Number(r.total), 0)
+      const todayTx = todaySalesData.length
+      const products = productsRes.data || []
+      const lowStock = products.filter(p => p.stock_quantity <= p.low_stock_threshold).length
+      const debtors = debtsRes.data || []
+      const totalDebt = debtors.reduce((s, d) => s + Number(d.balance), 0)
+
+      // Group week sales by date
+      const byDate: Record<string, number> = {}
+      for (let i = 6; i >= 0; i--) {
+        const d = new Date(Date.now() - i * 86400000).toISOString().split('T')[0]
+        byDate[d] = 0
+      }
+      for (const s of (weekSalesRes.data || [])) {
+        const d = s.created_at.split('T')[0]
+        if (d in byDate) byDate[d] += Number(s.total)
+      }
+      const week_revenue = Object.entries(byDate).map(([date, revenue]) => ({
+        date: new Date(date).toLocaleDateString('sw-TZ', { weekday: 'short' }),
+        revenue
+      }))
+
+      // Top products
+      const prodMap: Record<string, { qty: number; revenue: number }> = {}
+      for (const item of (topProductsRes.data || [])) {
+        if (!prodMap[item.product_name]) prodMap[item.product_name] = { qty: 0, revenue: 0 }
+        prodMap[item.product_name].qty += Number(item.quantity)
+        prodMap[item.product_name].revenue += Number(item.total_price)
+      }
+      const top_products = Object.entries(prodMap)
+        .map(([name, v]) => ({ name, ...v }))
+        .sort((a, b) => b.revenue - a.revenue)
+        .slice(0, 5)
+
+ setError(null)
+      setStats({ today_sales: todaySales, today_transactions: todayTx, total_products: products.length, low_stock_count: lowStock, total_debtors: debtors.length, total_debt_amount: totalDebt, week_revenue, top_products })
+    } catch (err) {
+      if (!controller.signal.aborted) {
+        console.error('Dashboard load error:', err)
+        setError('Failed to load dashboard data. Please try again.')
+      }
+    } finally {
+      if (!controller.signal.aborted) {
+        setLoading(false)
+      }
     }
-    for (const s of (weekSalesRes.data || [])) {
-      const d = s.created_at.split('T')[0]
-      if (d in byDate) byDate[d] += Number(s.total)
-    }
-    const week_revenue = Object.entries(byDate).map(([date, revenue]) => ({
-      date: new Date(date).toLocaleDateString('sw-TZ', { weekday: 'short' }),
-      revenue
-    }))
-
-    // Top products
-    const prodMap: Record<string, { qty: number; revenue: number }> = {}
-    for (const item of (topProductsRes.data || [])) {
-      if (!prodMap[item.product_name]) prodMap[item.product_name] = { qty: 0, revenue: 0 }
-      prodMap[item.product_name].qty += Number(item.quantity)
-      prodMap[item.product_name].revenue += Number(item.total_price)
-    }
-    const top_products = Object.entries(prodMap)
-      .map(([name, v]) => ({ name, ...v }))
-      .sort((a, b) => b.revenue - a.revenue)
-      .slice(0, 5)
-
-    setStats({ today_sales: todaySales, today_transactions: todayTx, total_products: products.length, low_stock_count: lowStock, total_debtors: debtors.length, total_debt_amount: totalDebt, week_revenue, top_products })
-    setLoading(false)
   }
 
   if (loading) return (
@@ -107,6 +160,26 @@ export default function Dashboard() {
         <h2><ShoppingCart size={20} />{t('dashboard')}</h2>
       </div>
       <StatSkeleton />
+    </div>
+  )
+
+  if (error) return (
+    <div>
+      <div className="page-header">
+        <h2><ShoppingCart size={20} />{t('dashboard')}</h2>
+      </div>
+      <div className="card" style={{ textAlign: 'center', padding: '48px 24px' }}>
+        <AlertTriangle size={48} style={{ color: 'var(--red)', marginBottom: 16 }} />
+        <h3 style={{ marginBottom: 8 }}>{t('error_loading_dashboard') || 'Error Loading Dashboard'}</h3>
+        <p style={{ color: 'var(--text3)', marginBottom: 24 }}>{error}</p>
+        <button 
+          className="btn btn-primary" 
+          onClick={() => loadStats()}
+          style={{ padding: '12px 24px' }}
+        >
+          {t('retry') || 'Retry'}
+        </button>
+      </div>
     </div>
   )
 
