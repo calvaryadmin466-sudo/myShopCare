@@ -1,9 +1,10 @@
 import { useEffect, useState } from 'react'
 import { supabase } from '../lib/supabase'
+import { uploadProductImage } from '../lib/uploadImage'
 import { useAuth } from '../contexts/AuthContext'
 import { useLang } from '../contexts/LangContext'
 import type { Product } from '../types'
-import { Plus, Search, Edit2, Trash2, X, Package } from 'lucide-react'
+import { Plus, Search, Edit2, Trash2, X, Package, Camera, Image as ImageIcon } from 'lucide-react'
 
 const UNITS = ['pcs', 'kg', 'g', 'litre', 'ml', 'box', 'pack', 'dozen', 'metre']
 
@@ -56,6 +57,7 @@ export default function Products() {
   const [editing, setEditing] = useState<Product | null>(null)
   const [form, setForm] = useState({ ...EMPTY })
   const [saving, setSaving] = useState(false)
+  const [uploading, setUploading] = useState(false)
   const [error, setError] = useState('')
 
   useEffect(() => { if (profile) load() }, [profile])
@@ -69,10 +71,24 @@ export default function Products() {
   function openAdd() { setForm({ ...EMPTY }); setEditing(null); setModal('add'); setError('') }
   function openEdit(p: Product) { setForm({ name: p.name, sku: p.sku || '', description: p.description || '', category: p.category, buying_price: p.buying_price, selling_price: p.selling_price, stock_quantity: p.stock_quantity, unit: p.unit, low_stock_threshold: p.low_stock_threshold, image_url: p.image_url || '' }); setEditing(p); setModal('edit'); setError('') }
 
+  async function pickImage(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    e.target.value = ''
+    if (!file) return
+    setUploading(true); setError('')
+    try {
+      const url = await uploadProductImage(file, profile!.shop_id)
+      setForm(f => ({ ...f, image_url: url }))
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Image upload failed')
+    }
+    setUploading(false)
+  }
+
   async function save() {
     if (!form.name) { setError('Product name is required'); return }
     setSaving(true)
-    const payload = { ...form, category: form.category.trim() || 'General', description: form.description?.trim() || null, buying_price: +form.buying_price, selling_price: +form.selling_price, stock_quantity: +form.stock_quantity, low_stock_threshold: +form.low_stock_threshold, shop_id: profile!.shop_id }
+    const payload = { ...form, category: form.category.trim() || 'General', description: form.description?.trim() || null, image_url: form.image_url || null, buying_price: +form.buying_price, selling_price: +form.selling_price, stock_quantity: +form.stock_quantity, low_stock_threshold: +form.low_stock_threshold, shop_id: profile!.shop_id }
     if (editing) {
       const { error: err } = await supabase.from('products').update(payload).eq('id', editing.id)
       if (err) { setError(err.message || 'Error updating product'); setSaving(false); return }
@@ -143,8 +159,15 @@ export default function Products() {
                   return (
                     <tr key={p.id}>
                       <td>
-                        <strong>{p.name}</strong>
-                        {p.description && <div style={{ color: 'var(--text3)', fontSize: '0.75rem' }}>{p.description}</div>}
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                          {p.image_url
+                            ? <img src={p.image_url} alt={p.name} className="product-thumb" />
+                            : <div className="product-thumb placeholder"><Package size={16} /></div>}
+                          <div>
+                            <strong>{p.name}</strong>
+                            {p.description && <div style={{ color: 'var(--text3)', fontSize: '0.75rem' }}>{p.description}</div>}
+                          </div>
+                        </div>
                       </td>
                       <td style={{ color: 'var(--text3)', fontSize: '0.8rem' }}>{p.sku || '—'}</td>
                       <td><span className="badge badge-blue">{p.category}</span></td>
@@ -180,6 +203,26 @@ export default function Products() {
             </div>
             <div className="modal-body">
               {error && <div className="alert alert-error">{error}</div>}
+              <div className="form-group">
+                <label>{t('product_image')}</label>
+                <div className="image-upload">
+                  {form.image_url
+                    ? <img src={form.image_url} alt="" className="image-preview" />
+                    : <div className="image-placeholder"><ImageIcon size={24} /></div>}
+                  <div className="image-upload-actions">
+                    <label className={`btn btn-ghost btn-sm ${uploading ? 'disabled' : ''}`} style={{ cursor: uploading ? 'wait' : 'pointer' }}>
+                      <Camera size={14} />
+                      {uploading ? t('uploading') : form.image_url ? t('change_photo') : t('upload_photo')}
+                      <input type="file" accept="image/*" style={{ display: 'none' }} disabled={uploading} onChange={pickImage} />
+                    </label>
+                    {form.image_url && !uploading && (
+                      <button className="btn btn-danger btn-sm" onClick={() => setForm(f => ({ ...f, image_url: '' }))}>
+                        <Trash2 size={13} />{t('remove')}
+                      </button>
+                    )}
+                  </div>
+                </div>
+              </div>
               <div className="form-group">
                 <label>{t('product_name')} *</label>
                 <input value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} />
@@ -230,7 +273,7 @@ export default function Products() {
             </div>
             <div className="modal-footer">
               <button className="btn btn-ghost" onClick={() => setModal(null)}>{t('cancel')}</button>
-              <button className="btn btn-primary" onClick={save} disabled={saving}>{saving ? t('loading') : t('save')}</button>
+              <button className="btn btn-primary" onClick={save} disabled={saving || uploading}>{saving ? t('loading') : t('save')}</button>
             </div>
           </div>
         </div>

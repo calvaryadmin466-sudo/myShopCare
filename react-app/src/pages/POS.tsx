@@ -3,7 +3,7 @@ import { supabase } from '../lib/supabase'
 import { useAuth } from '../contexts/AuthContext'
 import { useLang } from '../contexts/LangContext'
 import type { Product, CartItem, Sale, Worker } from '../types'
-import { Search, Trash2, X, Printer, ShoppingCart as CartIcon } from 'lucide-react'
+import { Search, Trash2, X, Printer, ShoppingCart as CartIcon, Package } from 'lucide-react'
 
 function fmt(n: number) { return new Intl.NumberFormat().format(Math.round(n)) }
 
@@ -153,6 +153,16 @@ export default function POS() {
     return matchSearch && matchCat
   })
 
+  // Barcode scanner support: scanners type the code and send Enter.
+  function handleSearchKey(e: React.KeyboardEvent<HTMLInputElement>) {
+    if (e.key !== 'Enter') return
+    const term = search.trim().toLowerCase()
+    if (!term) return
+    const exact = products.find(p => (p.sku || '').toLowerCase() === term && p.stock_quantity > 0)
+    const target = exact || (filtered.length === 1 && filtered[0].stock_quantity > 0 ? filtered[0] : null)
+    if (target) { addToCart(target); setSearch('') }
+  }
+
   const paymentMethods = [
     { v: 'cash', l: t('cash') },
     { v: 'mobile_money', l: t('mobile_money') },
@@ -171,7 +181,7 @@ export default function POS() {
         <div className="pos-products">
           <div className="filters" style={{ marginBottom: 12 }}>
             <div className="search-bar" style={{ flex: 1 }}>
-              <Search /><input value={search} onChange={e => setSearch(e.target.value)} placeholder={t('search_products')} />
+              <Search /><input value={search} onChange={e => setSearch(e.target.value)} onKeyDown={handleSearchKey} placeholder={t('scan_or_search')} autoFocus />
             </div>
             {categories.map(c => (
               <button key={c} className={`filter-chip ${catFilter === c ? 'active' : ''}`} onClick={() => setCatFilter(c)}>
@@ -184,6 +194,9 @@ export default function POS() {
             <div className="pos-product-list">
               {filtered.map(p => (
                 <div key={p.id} className={`pos-product-row ${p.stock_quantity === 0 ? 'out-of-stock' : ''}`} onClick={() => p.stock_quantity > 0 && addToCart(p)}>
+                  {p.image_url
+                    ? <img src={p.image_url} alt={p.name} className="pos-product-thumb" />
+                    : <div className="pos-product-thumb placeholder"><Package size={18} /></div>}
                   <div className="pos-product-main">
                     <div className="pos-product-name">{p.name}</div>
                     <div className="pos-product-meta">
@@ -323,7 +336,7 @@ export default function POS() {
       {/* Receipt Modal */}
       {receipt && (
         <div className="modal-overlay receipt-modal">
-          <div className="modal" style={{ maxWidth: 380 }}>
+          <div className="modal receipt-print" style={{ maxWidth: 380 }}>
             <div className="modal-header">
               <h3>{t('receipt')}</h3>
               <button className="btn btn-ghost btn-sm" onClick={() => setReceipt(null)}><X size={16} /></button>
@@ -331,13 +344,15 @@ export default function POS() {
             <div className="modal-body receipt-body">
               <div className="receipt-header">
                 <h2>{profile?.shop_name}</h2>
-                <p>{new Date().toLocaleString('sw-TZ')}</p>
-                {receipt.customer_name && <p>Mteja: {receipt.customer_name}</p>}
+                <p>{t('receipt_no')} {receipt.id.slice(0, 8).toUpperCase()}</p>
+                <p>{new Date(receipt.created_at || Date.now()).toLocaleString('sw-TZ')}</p>
+                <p>{t('sold_by')}: {receipt.cashier_name}</p>
+                {receipt.customer_name && <p>{t('customer')}: {receipt.customer_name}</p>}
               </div>
               <div className="receipt-items">
                 {receipt.items?.map(item => (
                   <div key={item.id} className="receipt-row">
-                    <span>{item.product_name} ×{item.quantity}</span>
+                    <span>{item.product_name} ×{item.quantity} @ {fmt(item.unit_price)}</span>
                     <span>{fmt(item.total_price)} TZS</span>
                   </div>
                 ))}
@@ -345,6 +360,7 @@ export default function POS() {
               <div className="receipt-row"><span>{t('subtotal')}</span><span>{fmt(receipt.subtotal)} TZS</span></div>
               {receipt.discount > 0 && <div className="receipt-row" style={{ color: 'var(--red)' }}><span>{t('discount')}</span><span>-{fmt(receipt.discount)} TZS</span></div>}
               <div className="receipt-row receipt-total"><span>{t('total')}</span><span>{fmt(receipt.total)} TZS</span></div>
+              <div className="receipt-row"><span>{t('payment_method')}</span><span>{paymentMethods.find(m => m.v === receipt.payment_method)?.l || receipt.payment_method}</span></div>
               <div className="receipt-row"><span>{t('amount_paid')}</span><span>{fmt(receipt.amount_paid)} TZS</span></div>
               <div className="receipt-row"><span>{t('change')}</span><span>{fmt(receipt.change_given)} TZS</span></div>
               <div className="receipt-footer"><p>Asante kwa kununua! 🙏</p><p>Thank you for shopping with us!</p></div>

@@ -561,6 +561,68 @@ tbody tr:last-child { border-bottom: none; }
 .receipt-total { font-weight: 700; font-size: 0.95rem; border-top: 1px solid var(--border); padding-top: 6px; margin-top: 4px; }
 .receipt-footer { text-align: center; color: var(--text3); font-size: 0.72rem; margin-top: 12px; }
 
+/* ─── Product thumbnails ────────────────────────────────────── */
+.product-thumb {
+  width: 42px; height: 42px;
+  border-radius: 8px;
+  object-fit: cover;
+  border: 1px solid var(--border);
+  flex-shrink: 0;
+  display: block;
+}
+.product-thumb.placeholder,
+.pos-product-thumb.placeholder {
+  display: flex; align-items: center; justify-content: center;
+  background: var(--bg3);
+  color: var(--text3);
+}
+.pos-product-thumb {
+  width: 46px; height: 46px;
+  border-radius: 8px;
+  object-fit: cover;
+  border: 1px solid var(--border);
+  flex-shrink: 0;
+}
+
+/* ─── Image upload (product modal) ──────────────────────────── */
+.image-upload { display: flex; align-items: center; gap: 14px; }
+.image-preview {
+  width: 84px; height: 84px;
+  border-radius: var(--radius);
+  object-fit: cover;
+  border: 1px solid var(--border);
+}
+.image-placeholder {
+  width: 84px; height: 84px;
+  border-radius: var(--radius);
+  background: var(--bg3);
+  border: 1px dashed var(--border2);
+  display: flex; align-items: center; justify-content: center;
+  color: var(--text3);
+}
+.image-upload-actions { display: flex; flex-direction: column; gap: 8px; align-items: flex-start; }
+
+/* ─── Print (receipt only) ──────────────────────────────────── */
+@media print {
+  body * { visibility: hidden; }
+  .receipt-print, .receipt-print * { visibility: visible; }
+  .receipt-print {
+    position: absolute;
+    left: 0; top: 0;
+    width: 100%;
+    max-width: 80mm;
+    max-height: none;
+    border: none;
+    box-shadow: none;
+    border-radius: 0;
+    background: white;
+    color: black;
+  }
+  .receipt-print .modal-header,
+  .receipt-print .modal-footer { display: none; }
+  .receipt-print .receipt-body { color: black; }
+}
+
 /* ─── Lang toggle ───────────────────────────────────────────── */
 .lang-toggle {
   display: flex; gap: 2px;
