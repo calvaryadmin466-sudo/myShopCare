@@ -8,6 +8,8 @@ interface AuthCtx {
   profile: Profile | null
   session: Session | null
   loading: boolean
+  accessLoading: boolean
+  accessAllowed: boolean
   signIn: (email: string, password: string) => Promise<{ error: string | null }>
   signUp: (email: string, password: string, fullName: string, shopName: string) => Promise<{ error: string | null }>
   signOut: () => Promise<void>
@@ -21,6 +23,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [profile, setProfile] = useState<Profile | null>(null)
   const [session, setSession] = useState<Session | null>(null)
   const [loading, setLoading] = useState(true)
+  const [accessLoading, setAccessLoading] = useState(false)
+  const [accessAllowed, setAccessAllowed] = useState(true)
   const fetchingRef = useRef(false)
 
   async function fetchProfile(uid: string) {
@@ -79,6 +83,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     if (user) await fetchProfile(user.id)
   }
 
+  async function checkCentralAccess(accessToken?: string) {
+    // Disabled until the Vercel server-only connector variables are configured.
+    if (import.meta.env.VITE_CENTRAL_ACCESS_GATE !== 'true') { setAccessAllowed(true); setAccessLoading(false); return }
+    if (!accessToken) { setAccessAllowed(false); setAccessLoading(false); return }
+    setAccessLoading(true)
+    try {
+      const response = await fetch('/api/access', { headers: { Authorization: `Bearer ${accessToken}` } })
+      const result = await response.json() as { allowed?: boolean }
+      setAccessAllowed(result.allowed === true)
+    } catch { setAccessAllowed(false) } finally { setAccessLoading(false) }
+  }
+
   useEffect(() => {
     // Kick off session + profile fetch in parallel at startup
     let mounted = true
@@ -90,6 +106,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setUser(s?.user ?? null)
       if (s?.user) {
         fetchProfile(s.user.id)
+        checkCentralAccess(s.access_token)
       } else {
         setLoading(false)
       }
@@ -101,9 +118,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setUser(s?.user ?? null)
       if (s?.user) {
         fetchProfile(s.user.id)
+        checkCentralAccess(s.access_token)
       } else {
         setProfile(null)
         setLoading(false)
+        setAccessAllowed(false)
       }
     })
 
@@ -135,7 +154,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }
 
   return (
-    <AuthContext.Provider value={{ user, profile, session, loading, signIn, signUp, signOut, refreshProfile }}>
+    <AuthContext.Provider value={{ user, profile, session, loading, accessLoading, accessAllowed, signIn, signUp, signOut, refreshProfile }}>
       {children}
     </AuthContext.Provider>
   )
