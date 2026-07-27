@@ -21,6 +21,15 @@ export default async function handler(request: RequestLike, response: ResponseLi
   const control = createClient(controlUrl, controlKey, { auth: { autoRefreshToken: false, persistSession: false } })
   const { data: site } = await control.from('sites').select('id').eq('domain', siteDomain).maybeSingle()
   if (!site) return response.status(200).json({ allowed: false, reason: 'Project is not registered in the control plane.' })
+  // myShopCare uses a separate Auth project. Record the verified account here so
+  // the control-plane dashboard can show who is actively using this project.
+  // Activity tracking must never prevent a user from reaching their account.
+  await control.from('site_activity').insert({
+    site_id: site.id,
+    event_type: 'signed_in',
+    user_email: user.email.toLowerCase(),
+    path: '/',
+  })
   // Existing myShopCare accounts live in their own Auth project, so the dashboard
   // stores their access by email in project_access. Central-Auth subscriptions
   // remain supported as a fallback for apps migrated to the shared identity.
