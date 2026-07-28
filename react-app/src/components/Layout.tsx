@@ -5,8 +5,9 @@ import { useLang } from '../contexts/LangContext'
 import { useTheme } from '../contexts/ThemeContext'
 import {
   LayoutDashboard, Package, ShoppingCart, CreditCard,
-  Tag, Settings, LogOut, X, Menu, Store, History, Moon, Sun
+  Tag, Settings, LogOut, X, Menu, Store, History, Moon, Sun, BarChart3, Receipt
 } from 'lucide-react'
+import { ExpiryNotificationBell } from './ExpiryNotificationBell'
 
 export default function Layout() {
   const { profile, signOut } = useAuth()
@@ -25,6 +26,8 @@ export default function Layout() {
     { to: '/products', icon: <Package />, label: t('products') },
     { to: '/sales', icon: <ShoppingCart />, label: t('sales') },
     { to: '/sales-history', icon: <History />, label: t('sales_history') },
+    { to: '/reports', icon: <BarChart3 />, label: t('reports') },
+    { to: '/expenses', icon: <Receipt />, label: t('expenses') },
     { to: '/debts', icon: <CreditCard />, label: t('debts') },
     { to: '/deals', icon: <Tag />, label: t('deals') },
     { to: '/settings', icon: <Settings />, label: t('settings') },
@@ -85,15 +88,16 @@ export default function Layout() {
             <h2>{profile?.shop_name || 'myShopCare'}</h2>
           </div>
           <div className="topbar-right">
-            <button className="theme-toggle" onClick={toggleTheme} aria-label="Toggle theme">
-              {theme === 'light' ? <Moon size={15} /> : <Sun size={15} />}
-              <span>{theme === 'light' ? 'Dark' : 'Light'}</span>
-            </button>
-            <div className="lang-toggle">
-              <button className={`lang-btn ${lang === 'sw' ? 'active' : ''}`} onClick={() => setLang('sw')}>SW</button>
-              <button className={`lang-btn ${lang === 'en' ? 'active' : ''}`} onClick={() => setLang('en')}>EN</button>
+              <ExpiryNotificationBell />
+              <button className="theme-toggle" onClick={toggleTheme} aria-label="Toggle theme">
+                {theme === 'light' ? <Moon size={15} /> : <Sun size={15} />}
+                <span>{theme === 'light' ? 'Dark' : 'Light'}</span>
+              </button>
+              <div className="lang-toggle">
+                <button className={`lang-btn ${lang === 'sw' ? 'active' : ''}`} onClick={() => setLang('sw')}>SW</button>
+                <button className={`lang-btn ${lang === 'en' ? 'active' : ''}`} onClick={() => setLang('en')}>EN</button>
+              </div>
             </div>
-          </div>
         </header>
 
         <div className="page-content">

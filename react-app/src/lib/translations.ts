@@ -7,6 +7,8 @@ export const translations: Record<'en' | 'sw', Translations> = {
     products: 'Products',
     sales: 'Sales / POS',
     sales_history: 'Sales History',
+    reports: 'Reports',
+    expenses: 'Expenses',
     debts: 'Debts',
     deals: 'Deals',
     settings: 'Settings',
@@ -72,6 +74,8 @@ export const translations: Record<'en' | 'sw', Translations> = {
     mobile_money: 'Mobile Money',
     card: 'Card',
     credit: 'Credit',
+    bank: 'Bank',
+    other: 'Other',
     subtotal: 'Subtotal',
     discount: 'Discount',
     total: 'Total',
@@ -129,6 +133,10 @@ export const translations: Record<'en' | 'sw', Translations> = {
     payment_history: 'Payment History',
     payment_amount: 'Payment Amount',
 
+    // Expenses
+    add_expense: 'Add Expense',
+    edit_expense: 'Edit Expense',
+
     // Deals
     add_deal: 'Add Deal',
     deal_name: 'Deal Name',
@@ -155,6 +163,47 @@ export const translations: Record<'en' | 'sw', Translations> = {
     date: 'Date',
     notes: 'Notes',
     shillings: 'TZS',
+
+    // Reports / P&L
+    profit_loss: 'Profit & Loss',
+    export_pdf: 'Export PDF',
+    export_excel: 'Export Excel',
+    week: 'Week',
+    month: 'Month',
+    year: 'Year',
+    by_product: 'By Product',
+    by_category: 'By Category',
+    by_order: 'By Order',
+    revenue: 'Revenue',
+    payment_date: 'Payment Date',
+    cogs: 'COGS',
+    cost_of_sales: 'Cost of Sales',
+    gross_profit: 'Gross Profit',
+    period: 'Period',
+    net_profit: 'Net Profit',
+    all: 'All',
+
+    // Expiry tracking
+    expiry_date: 'Expiry Date',
+    expiry_days_alert: 'Alert (days before expiry)',
+    expiry_tracking: 'Expiry Tracking',
+    expiry_alerts: 'Expiry Alerts',
+    expiry_alert_title: 'Product Near Expiry',
+    expiry_soon: 'Expiring Soon',
+    expires_today: 'Expires Today!',
+    expires_in_days: 'Expires in {n} days',
+    expired_days_ago: 'Expired {n} days ago',
+    all_cleared: 'No active notifications',
+    dismiss: 'Dismiss',
+    dismiss_all: 'Dismiss all',
+    view_all_products: 'View all products',
+    near_expiry_count: 'Near Expiry',
+
+    // Low stock notifications
+    notification_alerts: 'Notifications',
+    low_stock_alert_title: 'Low Stock Alert',
+    out_of_stock_alert_title: 'Out of Stock Alert',
+    items_left: '{n} {unit} left',
   },
   sw: {
     // Nav
@@ -162,6 +211,8 @@ export const translations: Record<'en' | 'sw', Translations> = {
     products: 'Bidhaa',
     sales: 'Mauzo / POS',
     sales_history: 'Historia ya Mauzo',
+    reports: 'Ripoti',
+    expenses: 'Matumizi',
     debts: 'Madeni',
     deals: 'Ofa',
     settings: 'Mipangilio',
@@ -227,6 +278,8 @@ export const translations: Record<'en' | 'sw', Translations> = {
     mobile_money: 'Pesa ya Simu',
     card: 'Kadi',
     credit: 'Mkopo',
+    bank: 'Benki',
+    other: 'Nyingine',
     subtotal: 'Jumla Ndogo',
     discount: 'Punguzo',
     total: 'Jumla',
@@ -299,6 +352,10 @@ export const translations: Record<'en' | 'sw', Translations> = {
     expired: 'Imekwisha',
     usage: 'Matumizi',
 
+    // Expenses
+    add_expense: 'Ongeza Matumizi',
+    edit_expense: 'Hariri Matumizi',
+
     // Common
     loading: 'Inapakia...',
     error: 'Hitilafu',
@@ -310,5 +367,46 @@ export const translations: Record<'en' | 'sw', Translations> = {
     date: 'Tarehe',
     notes: 'Maelezo',
     shillings: 'TZS',
+
+    // Reports / P&L
+    profit_loss: 'Faida na Hasara',
+    export_pdf: 'Pakua PDF',
+    export_excel: 'Pakua Excel',
+    week: 'Wiki',
+    month: 'Mwezi',
+    year: 'Mwaka',
+    by_product: 'Kwa Bidhaa',
+    by_category: 'Kwa Kategoria',
+    by_order: 'Kwa Muamala',
+    revenue: 'Mapato',
+    payment_date: 'Tarehe ya Malipo',
+    cogs: 'Gharama za Mauzo (COGS)',
+    cost_of_sales: 'Gharama ya Bidhaa Zilizouzwa',
+    gross_profit: 'Faida Ghafi',
+    period: 'Kipindi',
+    net_profit: 'Faida Safi',
+    all: 'Zote',
+
+    // Expiry tracking
+    expiry_date: 'Tarehe ya Mwisho',
+    expiry_days_alert: 'Tahadhari (siku kabla ya mwisho)',
+    expiry_tracking: 'Ufuatiliaji wa Tarehe ya Mwisho',
+    expiry_alerts: 'Tahadhari za Mwisho',
+    expiry_alert_title: 'Bidhaa Karibu na Mwisho',
+    expiry_soon: 'Karibu Kumalizika',
+    expires_today: 'Inamalizika Leo!',
+    expires_in_days: 'Inamalizika baada ya siku {n}',
+    expired_days_ago: 'Iliisha siku {n} zilizopita',
+    all_cleared: 'Hakuna taarifa zozote',
+    dismiss: 'Ondoa',
+    dismiss_all: 'Ondoa zote',
+    view_all_products: 'Tazama bidhaa zote',
+    near_expiry_count: 'Karibu na Mwisho',
+
+    // Low stock notifications
+    notification_alerts: 'Tahadhari na Taarifa',
+    low_stock_alert_title: 'Tahadhari ya Stoo Chini',
+    out_of_stock_alert_title: 'Tahadhari ya Bidhaa Imeisha',
+    items_left: 'Bado {n} {unit}',
   }
 }

@@ -9,9 +9,11 @@ import Dashboard from './pages/Dashboard'
 import Products from './pages/Products'
 import POS from './pages/POS'
 import SalesHistory from './pages/SalesHistory'
+import Expenses from './pages/Expenses'
 import Debts from './pages/Debts'
 import Deals from './pages/Deals'
 import Settings from './pages/Settings'
+import Reports from './pages/Reports'
 
 function LoadingScreen() {
   return (
@@ -61,6 +63,8 @@ export default function App() {
                 <Route path="products" element={<Products />} />
                 <Route path="sales" element={<POS />} />
                 <Route path="sales-history" element={<SalesHistory />} />
+                <Route path="reports" element={<Reports />} />
+                <Route path="expenses" element={<Expenses />} />
                 <Route path="debts" element={<Debts />} />
                 <Route path="deals" element={<Deals />} />
                 <Route path="settings" element={<Settings />} />

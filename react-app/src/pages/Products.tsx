@@ -4,13 +4,14 @@ import { uploadProductImage } from '../lib/uploadImage'
 import { useAuth } from '../contexts/AuthContext'
 import { useLang } from '../contexts/LangContext'
 import type { Product } from '../types'
-import { Plus, Search, Edit2, Trash2, X, Package, Camera, Image as ImageIcon } from 'lucide-react'
+import { Plus, Search, Edit2, Trash2, X, Package, Camera, Image as ImageIcon, CalendarX } from 'lucide-react'
 
 const UNITS = ['pcs', 'kg', 'g', 'litre', 'ml', 'box', 'pack', 'dozen', 'metre']
 
 const EMPTY: Omit<Product, 'id' | 'shop_id' | 'created_at' | 'updated_at'> = {
   name: '', sku: '', description: '', category: 'General', buying_price: 0, selling_price: 0,
-  stock_quantity: 0, unit: 'pcs', low_stock_threshold: 5, image_url: ''
+  stock_quantity: 0, unit: 'pcs', low_stock_threshold: 5, image_url: '',
+  expiry_date: '', expiry_days_alert: 30,
 }
 
 function fmt(n: number) { return new Intl.NumberFormat().format(n) }
@@ -69,7 +70,7 @@ export default function Products() {
   }
 
   function openAdd() { setForm({ ...EMPTY }); setEditing(null); setModal('add'); setError('') }
-  function openEdit(p: Product) { setForm({ name: p.name, sku: p.sku || '', description: p.description || '', category: p.category, buying_price: p.buying_price, selling_price: p.selling_price, stock_quantity: p.stock_quantity, unit: p.unit, low_stock_threshold: p.low_stock_threshold, image_url: p.image_url || '' }); setEditing(p); setModal('edit'); setError('') }
+  function openEdit(p: Product) { setForm({ name: p.name, sku: p.sku || '', description: p.description || '', category: p.category, buying_price: p.buying_price, selling_price: p.selling_price, stock_quantity: p.stock_quantity, unit: p.unit, low_stock_threshold: p.low_stock_threshold, image_url: p.image_url || '', expiry_date: p.expiry_date || '', expiry_days_alert: p.expiry_days_alert ?? 30 }); setEditing(p); setModal('edit'); setError('') }
 
   async function pickImage(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
@@ -88,7 +89,7 @@ export default function Products() {
   async function save() {
     if (!form.name) { setError('Product name is required'); return }
     setSaving(true)
-    const payload = { ...form, category: form.category.trim() || 'General', description: form.description?.trim() || null, image_url: form.image_url || null, buying_price: +form.buying_price, selling_price: +form.selling_price, stock_quantity: +form.stock_quantity, low_stock_threshold: +form.low_stock_threshold, shop_id: profile!.shop_id }
+    const payload = { ...form, category: form.category.trim() || 'General', description: form.description?.trim() || null, image_url: form.image_url || null, buying_price: +form.buying_price, selling_price: +form.selling_price, stock_quantity: +form.stock_quantity, low_stock_threshold: +form.low_stock_threshold, expiry_date: form.expiry_date || null, expiry_days_alert: +form.expiry_days_alert || 30, shop_id: profile!.shop_id }
     if (editing) {
       const { error: err } = await supabase.from('products').update(payload).eq('id', editing.id)
       if (err) { setError(err.message || 'Error updating product'); setSaving(false); return }
@@ -146,16 +147,25 @@ export default function Products() {
                   <th>{t('buying_price')}</th>
                   <th>{t('selling_price')}</th>
                   <th>{t('stock')}</th>
+                  <th>{t('expiry_date')}</th>
                   <th>{t('status')}</th>
                   <th>{t('actions')}</th>
                 </tr>
               </thead>
               <tbody>
                 {filtered.length === 0 ? (
-                  <tr><td colSpan={8}><div className="empty-state"><Package /><p>{t('no_data')}</p></div></td></tr>
+                  <tr><td colSpan={9}><div className="empty-state"><Package /><p>{t('no_data')}</p></div></td></tr>
                 ) : filtered.map(p => {
                   const isLow = p.stock_quantity <= p.low_stock_threshold
                   const isOut = p.stock_quantity === 0
+
+                  // expiry logic
+                  const today = new Date(); today.setHours(0,0,0,0)
+                  const expDate = p.expiry_date ? (() => { const d = new Date(p.expiry_date + 'T00:00:00'); d.setHours(0,0,0,0); return d })() : null
+                  const daysLeft = expDate ? Math.round((expDate.getTime() - today.getTime()) / 86400000) : null
+                  const isExpired = daysLeft !== null && daysLeft < 0
+                  const isExpiringSoon = daysLeft !== null && daysLeft >= 0 && daysLeft <= (p.expiry_days_alert ?? 30)
+
                   return (
                     <tr key={p.id}>
                       <td>
@@ -175,9 +185,30 @@ export default function Products() {
                       <td style={{ fontWeight: 600, color: 'var(--accent)' }}>{fmt(p.selling_price)} TZS</td>
                       <td>{fmt(p.stock_quantity)} {p.unit}</td>
                       <td>
+                        {!p.expiry_date ? (
+                          <span style={{ color: 'var(--text3)', fontSize: '0.8rem' }}>—</span>
+                        ) : (
+                          <div>
+                            <div style={{ fontSize: '0.8rem' }}>{new Date(p.expiry_date + 'T00:00:00').toLocaleDateString('sw-TZ')}</div>
+                            {isExpired && (
+                              <div style={{ fontSize: '0.7rem', color: 'var(--red)', fontWeight: 600, display: 'flex', alignItems: 'center', gap: 3, marginTop: 2 }}>
+                                <CalendarX size={11} />{t('expired')}
+                              </div>
+                            )}
+                            {isExpiringSoon && !isExpired && (
+                              <div style={{ fontSize: '0.7rem', color: '#f97316', fontWeight: 600, display: 'flex', alignItems: 'center', gap: 3, marginTop: 2 }}>
+                                <CalendarX size={11} />{daysLeft === 0 ? t('expires_today') : `${daysLeft}d`}
+                              </div>
+                            )}
+                          </div>
+                        )}
+                      </td>
+                      <td>
                         {isOut ? <span className="badge badge-red">{t('out_of_stock')}</span>
                           : isLow ? <span className="badge badge-yellow">Low: {p.stock_quantity}</span>
                             : <span className="badge badge-green">{t('in_stock')}</span>}
+                        {isExpired && <div style={{ marginTop: 3 }}><span className="badge badge-red">{t('expired')}</span></div>}
+                        {isExpiringSoon && !isExpired && <div style={{ marginTop: 3 }}><span className="badge" style={{ background: 'rgba(249,115,22,0.12)', color: '#f97316' }}>{t('expiry_soon')}</span></div>}
                       </td>
                       <td>
                         <div style={{ display: 'flex', gap: 6 }}>
@@ -269,6 +300,20 @@ export default function Products() {
               <div className="form-group">
                 <label>{t('low_stock_alert')}</label>
                 <input type="number" min="0" value={form.low_stock_threshold} onChange={e => setForm(f => ({ ...f, low_stock_threshold: +e.target.value }))} />
+              </div>
+              <div className="divider" />
+              <div style={{ fontSize: '0.78rem', fontWeight: 600, color: 'var(--text3)', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 10 }}>
+                {t('expiry_tracking')}
+              </div>
+              <div className="form-grid">
+                <div className="form-group">
+                  <label>{t('expiry_date')}</label>
+                  <input type="date" value={form.expiry_date || ''} onChange={e => setForm(f => ({ ...f, expiry_date: e.target.value }))} />
+                </div>
+                <div className="form-group">
+                  <label>{t('expiry_days_alert')}</label>
+                  <input type="number" min="1" max="365" value={form.expiry_days_alert ?? 30} onChange={e => setForm(f => ({ ...f, expiry_days_alert: +e.target.value }))} />
+                </div>
               </div>
             </div>
             <div className="modal-footer">

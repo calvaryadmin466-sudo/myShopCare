@@ -33,6 +33,8 @@ export interface Product {
   unit: string;
   low_stock_threshold: number;
   image_url?: string;
+  expiry_date?: string | null;       // ISO date string YYYY-MM-DD
+  expiry_days_alert: number;         // days before expiry to alert (default 30)
   created_at: string;
   updated_at: string;
 }
@@ -66,6 +68,8 @@ export interface SaleItem {
   quantity: number;
   unit_price: number;
   total_price: number;
+  unit_cost?: number;
+  total_cost?: number;
 }
 
 export interface CartItem extends Product {
@@ -96,6 +100,17 @@ export interface DebtPayment {
   amount: number;
   payment_method: string;
   notes?: string;
+  created_at: string;
+}
+
+export interface Expense {
+  id: string;
+  shop_id: string;
+  category: string;
+  description?: string;
+  amount: number;
+  payment_method: 'cash' | 'mobile_money' | 'card' | 'bank' | 'other';
+  expense_date: string;
   created_at: string;
 }
 

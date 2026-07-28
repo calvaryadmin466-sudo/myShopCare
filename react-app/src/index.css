@@ -602,11 +602,17 @@ tbody tr:last-child { border-bottom: none; }
 }
 .image-upload-actions { display: flex; flex-direction: column; gap: 8px; align-items: flex-start; }
 
-/* ─── Print (receipt only) ──────────────────────────────────── */
+/* ─── Print (receipt and general pages) ─────────────────────── */
 @media print {
-  body * { visibility: hidden; }
-  .receipt-print, .receipt-print * { visibility: visible; }
-  .receipt-print {
+  .no-print, .sidebar, .topbar { display: none !important; }
+  .main-content { margin-left: 0 !important; }
+  .page-content { padding: 0 !important; }
+}
+
+@media print {
+  body:has(.receipt-print) * { visibility: hidden; }
+  body:has(.receipt-print) .receipt-print, body:has(.receipt-print) .receipt-print * { visibility: visible; }
+  body:has(.receipt-print) .receipt-print {
     position: absolute;
     left: 0; top: 0;
     width: 100%;
@@ -618,9 +624,9 @@ tbody tr:last-child { border-bottom: none; }
     background: white;
     color: black;
   }
-  .receipt-print .modal-header,
-  .receipt-print .modal-footer { display: none; }
-  .receipt-print .receipt-body { color: black; }
+  body:has(.receipt-print) .receipt-print .modal-header,
+  body:has(.receipt-print) .receipt-print .modal-footer { display: none; }
+  body:has(.receipt-print) .receipt-print .receipt-body { color: black; }
 }
 
 /* ─── Lang toggle ───────────────────────────────────────────── */
@@ -686,3 +692,24 @@ tbody tr:last-child { border-bottom: none; }
   flex-direction: column; gap: 16px;
 }
 .loading-screen h2 { font-family: var(--font-display); font-size: 1.5rem; color: var(--accent); }
+
+/* ─── Notification Animations ───────────────────────────────── */
+@keyframes bell-shake {
+  0%, 100% { transform: rotate(0deg); }
+  15%       { transform: rotate(12deg); }
+  30%       { transform: rotate(-10deg); }
+  45%       { transform: rotate(8deg); }
+  60%       { transform: rotate(-6deg); }
+  75%       { transform: rotate(3deg); }
+  90%       { transform: rotate(-2deg); }
+}
+
+@keyframes slide-in-down {
+  from { opacity: 0; transform: translateY(-12px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes slide-in-up {
+  from { opacity: 0; transform: translateY(24px) scale(0.94); }
+  to   { opacity: 1; transform: translateY(0) scale(1); }
+}

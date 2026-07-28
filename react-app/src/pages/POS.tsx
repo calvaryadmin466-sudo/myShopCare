@@ -93,8 +93,8 @@ export default function POS() {
       total,
       payment_method: payment.method,
       payment_status: payment.method === 'credit' ? 'pending' : (+payment.amount_paid >= total ? 'paid' : 'partial'),
-      amount_paid: +payment.amount_paid || total,
-      change_given: change,
+      amount_paid: payment.method === 'credit' ? 0 : (+payment.amount_paid || total),
+      change_given: payment.method === 'credit' ? 0 : change,
     }
 
     const { data: sale, error } = await supabase.from('sales').insert(saleData).select().single()
@@ -108,6 +108,8 @@ export default function POS() {
       quantity: c.qty,
       unit_price: c.selling_price,
       total_price: c.selling_price * c.qty,
+      unit_cost: c.buying_price,
+      total_cost: c.buying_price * c.qty,
     }))
     const { error: itemsError } = await supabase.from('sale_items').insert(items)
     if (itemsError) {
