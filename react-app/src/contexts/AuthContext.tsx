@@ -132,6 +132,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   }, [])
 
+  useEffect(() => {
+    // Supabase only fires onAuthStateChange on sign-in or token refresh (roughly
+    // hourly), so a pause applied mid-session would otherwise take up to an hour
+    // to take effect. Poll independently so a paused user is locked out promptly.
+    if (!session?.access_token) return
+    const id = window.setInterval(() => checkCentralAccess(session.access_token), 60_000)
+    return () => window.clearInterval(id)
+  }, [session?.access_token])
+
   async function signIn(email: string, password: string) {
     const { error } = await supabase.auth.signInWithPassword({ email, password })
     return { error: error?.message ?? null }
