@@ -180,7 +180,9 @@ CREATE TABLE IF NOT EXISTS sale_items (
   product_name  TEXT NOT NULL,
   quantity      NUMERIC(12,2) NOT NULL,
   unit_price    NUMERIC(12,2) NOT NULL,
-  total_price   NUMERIC(12,2) NOT NULL
+  total_price   NUMERIC(12,2) NOT NULL,
+  unit_cost     NUMERIC(12,2) NOT NULL DEFAULT 0,
+  total_cost    NUMERIC(12,2) NOT NULL DEFAULT 0
 );
 
 ALTER TABLE sale_items ENABLE ROW LEVEL SECURITY;
@@ -229,6 +231,22 @@ CREATE TABLE IF NOT EXISTS debt_payments (
 ALTER TABLE debt_payments ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS "Shop debt payments" ON debt_payments;
 CREATE POLICY "Shop debt payments" ON debt_payments FOR ALL USING (debt_id IN (SELECT id FROM debts WHERE shop_id = public.get_my_shop_id()));
+
+-- ── Expenses ──────────────────────────────────────────────────
+CREATE TABLE IF NOT EXISTS expenses (
+  id            UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  shop_id        UUID NOT NULL,
+  category       TEXT NOT NULL DEFAULT 'General',
+  description    TEXT,
+  amount         NUMERIC(12,2) NOT NULL DEFAULT 0,
+  payment_method TEXT NOT NULL DEFAULT 'cash' CHECK (payment_method IN ('cash','mobile_money','card','bank','other')),
+  expense_date   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  created_at     TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+ALTER TABLE expenses ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Shop expenses" ON expenses;
+CREATE POLICY "Shop expenses" ON expenses FOR ALL USING (shop_id = public.get_my_shop_id());
 
 -- ── Deals ─────────────────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS deals (
@@ -283,3 +301,5 @@ CREATE INDEX IF NOT EXISTS idx_sales_created ON sales(created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_debts_shop ON debts(shop_id);
 CREATE INDEX IF NOT EXISTS idx_debts_status ON debts(status);
 CREATE INDEX IF NOT EXISTS idx_deals_shop ON deals(shop_id);
+CREATE INDEX IF NOT EXISTS idx_expenses_shop ON expenses(shop_id);
+CREATE INDEX IF NOT EXISTS idx_expenses_date ON expenses(expense_date DESC);
