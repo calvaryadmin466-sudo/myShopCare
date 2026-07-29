@@ -43,3 +43,5 @@ yarn-error.log*
 
 # Legacy app (removed)
 myShopCare 1/
+.vercel
+.env*

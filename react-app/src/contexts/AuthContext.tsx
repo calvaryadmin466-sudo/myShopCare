@@ -10,6 +10,7 @@ interface AuthCtx {
   loading: boolean
   accessLoading: boolean
   accessAllowed: boolean
+  accessReason: string | null
   signIn: (email: string, password: string) => Promise<{ error: string | null }>
   signUp: (email: string, password: string, fullName: string, shopName: string) => Promise<{ error: string | null }>
   signOut: () => Promise<void>
@@ -25,6 +26,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [loading, setLoading] = useState(true)
   const [accessLoading, setAccessLoading] = useState(false)
   const [accessAllowed, setAccessAllowed] = useState(true)
+  const [accessReason, setAccessReason] = useState<string | null>(null)
   const fetchingRef = useRef(false)
 
   async function fetchProfile(uid: string) {
@@ -85,14 +87,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   async function checkCentralAccess(accessToken?: string) {
     // Disabled until the Vercel server-only connector variables are configured.
-    if (import.meta.env.VITE_CENTRAL_ACCESS_GATE !== 'true') { setAccessAllowed(true); setAccessLoading(false); return }
-    if (!accessToken) { setAccessAllowed(false); setAccessLoading(false); return }
+    if (import.meta.env.VITE_CENTRAL_ACCESS_GATE !== 'true') { setAccessAllowed(true); setAccessReason(null); setAccessLoading(false); return }
+    if (!accessToken) { setAccessAllowed(false); setAccessReason('session_verification_failed'); setAccessLoading(false); return }
     setAccessLoading(true)
     try {
       const response = await fetch('/api/access', { headers: { Authorization: `Bearer ${accessToken}` } })
-      const result = await response.json() as { allowed?: boolean }
+      const result = await response.json() as { allowed?: boolean; reason?: string }
       setAccessAllowed(result.allowed === true)
-    } catch { setAccessAllowed(false) } finally { setAccessLoading(false) }
+      setAccessReason(result.reason ?? null)
+    } catch { setAccessAllowed(false); setAccessReason('access_check_unavailable') } finally { setAccessLoading(false) }
   }
 
   useEffect(() => {
@@ -123,6 +126,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         setProfile(null)
         setLoading(false)
         setAccessAllowed(false)
+        setAccessReason(null)
       }
     })
 
@@ -163,7 +167,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }
 
   return (
-    <AuthContext.Provider value={{ user, profile, session, loading, accessLoading, accessAllowed, signIn, signUp, signOut, refreshProfile }}>
+    <AuthContext.Provider value={{ user, profile, session, loading, accessLoading, accessAllowed, accessReason, signIn, signUp, signOut, refreshProfile }}>
       {children}
     </AuthContext.Provider>
   )
