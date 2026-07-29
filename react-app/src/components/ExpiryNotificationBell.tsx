@@ -91,8 +91,6 @@ export function ExpiryNotificationBell() {
   const expiredOrOutCount = visibleAlerts.filter(a => (a.type === 'expiry' && (a.daysLeft ?? 0) < 0) || (a.type === 'low_stock' && a.stockQuantity === 0)).length
   const warningCount = unread - expiredOrOutCount
 
-  if (notifications.length === 0 && !currentToast) return null
-
   return (
     <>
       {/* ── Bell button ─────────────────────────────────────── */}

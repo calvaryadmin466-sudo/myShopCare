@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../contexts/AuthContext'
 import type { Product } from '../types'
@@ -21,13 +21,7 @@ export function useNotifications() {
   const [notifications, setNotifications] = useState<AppNotification[]>([])
   const [loading, setLoading] = useState(true)
 
-  useEffect(() => {
-    if (profile?.shop_id) {
-      loadNotifications()
-    }
-  }, [profile?.shop_id])
-
-  async function loadNotifications() {
+  const loadNotifications = useCallback(async () => {
     if (!profile?.shop_id) return
     setLoading(true)
 
@@ -88,7 +82,36 @@ export function useNotifications() {
 
     setNotifications(list)
     setLoading(false)
-  }
+  }, [profile?.shop_id])
+
+  useEffect(() => {
+    const shopId = profile?.shop_id
+    if (!shopId) {
+      setNotifications([])
+      setLoading(false)
+      return
+    }
+
+    loadNotifications()
+
+    // Keep the bell current when products are added, sold, or edited elsewhere.
+    const channel = supabase
+      .channel(`product-notifications:${shopId}`)
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'products', filter: `shop_id=eq.${shopId}` },
+        loadNotifications,
+      )
+      .subscribe()
+
+    // Expiry alerts also change as a new day begins, even if no product is edited.
+    const refreshTimer = window.setInterval(loadNotifications, 60_000)
+
+    return () => {
+      window.clearInterval(refreshTimer)
+      supabase.removeChannel(channel)
+    }
+  }, [profile?.shop_id, loadNotifications])
 
   return { notifications, loading, refetch: loadNotifications }
 }
