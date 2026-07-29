@@ -3,13 +3,31 @@ import { supabase } from '../lib/supabase'
 import { useAuth } from '../contexts/AuthContext'
 import { useLang } from '../contexts/LangContext'
 import type { Sale, SaleItem } from '../types'
-import { Calendar, Eye, FileText, Search, X } from 'lucide-react'
+import { Calendar, Download, Eye, FileText, Printer, Search, X } from 'lucide-react'
+import * as XLSX from 'xlsx'
 
 type SaleWithItems = Sale & { sale_items?: SaleItem[] }
 type DateFilter = 'today' | 'week' | 'month' | 'all'
 
 function fmt(n: number) {
   return new Intl.NumberFormat().format(Math.round(n))
+}
+
+function escapeHtml(value: string | number | undefined | null) {
+  return String(value ?? '').replace(/[&<>'"]/g, char => ({
+    '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#039;', '"': '&quot;'
+  }[char] || char))
+}
+
+function downloadBlob(filename: string, blob: Blob) {
+  const url = URL.createObjectURL(blob)
+  const link = document.createElement('a')
+  link.href = url
+  link.download = filename
+  document.body.appendChild(link)
+  link.click()
+  link.remove()
+  URL.revokeObjectURL(url)
 }
 
 function startOfToday() {
@@ -105,6 +123,60 @@ export default function SalesHistory() {
   const totalItems = filtered.reduce((sum, s) => sum + (s.items || []).reduce((n, i) => n + Number(i.quantity), 0), 0)
 
   const dateFilters: DateFilter[] = ['today', 'week', 'month', 'all']
+
+  function exportSaleExcel(sale: SaleWithItems) {
+    const workbook = XLSX.utils.book_new()
+    const summary = XLSX.utils.aoa_to_sheet([
+      [t('sale_details')],
+      [t('date'), new Date(sale.created_at).toLocaleString('sw-TZ')],
+      [t('sold_by'), sale.cashier_name || t('unknown_seller')],
+      [t('customer'), sale.customer_name || t('walk_in_customer')],
+      [t('customer_phone'), sale.customer_phone || ''],
+      [t('payment_method'), t(sale.payment_method)],
+      [t('status'), t(sale.payment_status)],
+      [],
+      [t('subtotal'), Number(sale.subtotal)],
+      [t('discount'), Number(sale.discount)],
+      [t('total'), Number(sale.total)],
+      [t('amount_paid'), Number(sale.amount_paid)],
+      [t('change'), Number(sale.change_given)],
+    ])
+    XLSX.utils.book_append_sheet(workbook, summary, 'Sale summary')
+
+    const items = XLSX.utils.json_to_sheet((sale.items || []).map(item => ({
+      [t('product_name')]: item.product_name,
+      [t('qty')]: Number(item.quantity),
+      'Unit price (TZS)': Number(item.unit_price),
+      [t('total') + ' (TZS)']: Number(item.total_price),
+    })))
+    XLSX.utils.book_append_sheet(workbook, items, 'Items')
+
+    const data = XLSX.write(workbook, { bookType: 'xlsx', type: 'array' })
+    downloadBlob(
+      `sale_${new Date(sale.created_at).toISOString().slice(0, 10)}_${sale.id.slice(0, 8)}.xlsx`,
+      new Blob([data], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }),
+    )
+  }
+
+  function printSale(sale: SaleWithItems) {
+    const printWindow = window.open('', '_blank', 'width=720,height=900')
+    if (!printWindow) return
+    const rows = (sale.items || []).map(item => `
+      <tr><td>${escapeHtml(item.product_name)}</td><td>${fmt(Number(item.quantity))}</td><td>${fmt(Number(item.unit_price))}</td><td>${fmt(Number(item.total_price))}</td></tr>
+    `).join('')
+    printWindow.document.write(`<!doctype html><html><head><title>${escapeHtml(t('sale_details'))}</title><style>
+      body { font-family: Arial, sans-serif; color: #1f2937; margin: 32px; } h1 { font-size: 22px; margin: 0 0 8px; } p { margin: 4px 0; color: #4b5563; } table { width: 100%; border-collapse: collapse; margin: 24px 0 16px; } th, td { padding: 9px; border-bottom: 1px solid #e5e7eb; text-align: left; } th { background: #f9fafb; } td:not(:first-child), th:not(:first-child) { text-align: right; } .totals { margin-left: auto; width: 280px; } .total { font-size: 18px; font-weight: 700; border-top: 2px solid #111827; padding-top: 8px; margin-top: 8px; } @media print { body { margin: 16px; } }
+    </style></head><body><h1>${escapeHtml(profile?.shop_name || 'myShopCare')}</h1><h2>${escapeHtml(t('sale_details'))}</h2>
+      <p>${escapeHtml(t('date'))}: ${escapeHtml(new Date(sale.created_at).toLocaleString('sw-TZ'))}</p>
+      <p>${escapeHtml(t('sold_by'))}: ${escapeHtml(sale.cashier_name || t('unknown_seller'))}</p>
+      <p>${escapeHtml(t('customer'))}: ${escapeHtml(sale.customer_name || t('walk_in_customer'))}</p>
+      ${sale.customer_phone ? `<p>${escapeHtml(t('customer_phone'))}: ${escapeHtml(sale.customer_phone)}</p>` : ''}
+      <p>${escapeHtml(t('payment_method'))}: ${escapeHtml(t(sale.payment_method))}</p>
+      <table><thead><tr><th>${escapeHtml(t('product_name'))}</th><th>${escapeHtml(t('qty'))}</th><th>Unit price</th><th>${escapeHtml(t('total'))}</th></tr></thead><tbody>${rows}</tbody></table>
+      <div class="totals"><p>${escapeHtml(t('subtotal'))}: ${fmt(Number(sale.subtotal))} TZS</p>${Number(sale.discount) > 0 ? `<p>${escapeHtml(t('discount'))}: -${fmt(Number(sale.discount))} TZS</p>` : ''}<p class="total">${escapeHtml(t('total'))}: ${fmt(Number(sale.total))} TZS</p><p>${escapeHtml(t('amount_paid'))}: ${fmt(Number(sale.amount_paid))} TZS</p><p>${escapeHtml(t('change'))}: ${fmt(Number(sale.change_given))} TZS</p></div>
+      <script>window.onload = () => { window.print(); window.onafterprint = () => window.close(); }<\/script></body></html>`)
+    printWindow.document.close()
+  }
 
   return (
     <div>
@@ -207,7 +279,11 @@ export default function SalesHistory() {
           <div className="modal" onClick={e => e.stopPropagation()}>
             <div className="modal-header">
               <h3>{t('sale_details')}</h3>
-              <button className="btn btn-ghost btn-sm" onClick={() => setSelected(null)}><X size={16} /></button>
+              <div style={{ display: 'flex', gap: 6 }}>
+                <button className="btn btn-ghost btn-sm" onClick={() => printSale(selected)}><Printer size={14} />{t('print')}</button>
+                <button className="btn btn-primary btn-sm" onClick={() => exportSaleExcel(selected)}><Download size={14} />{t('export_excel')}</button>
+                <button className="btn btn-ghost btn-sm" onClick={() => setSelected(null)}><X size={16} /></button>
+              </div>
             </div>
             <div className="modal-body">
               <div className="summary-row"><span>{t('date')}</span><span>{new Date(selected.created_at).toLocaleString('sw-TZ')}</span></div>
