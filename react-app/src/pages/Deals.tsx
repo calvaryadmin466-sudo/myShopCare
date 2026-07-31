@@ -12,7 +12,7 @@ const DEAL_TYPES = [
   { v: 'bundle', l: 'bundle' },
 ]
 
-const EMPTY: Omit<Deal, 'id' | 'shop_id' | 'business_id' | 'created_at' | 'usage_count'> = {
+const EMPTY: Omit<Deal, 'id' | 'shop_id' | 'created_at' | 'usage_count'> & Pick<Deal, 'business_id'> = {
   name: '', description: '', deal_type: 'percentage', discount_value: 0,
   min_purchase: 0, applicable_products: [], start_date: '', end_date: '', is_active: true, business_id: ''
 }

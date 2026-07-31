@@ -91,7 +91,7 @@ export async function getBusinessLogoUrl(businessId: string): Promise<string | n
     }
 
     // Get the most recent file
-    const latestFile = files.sort((a, b) => b.created_at.localeCompare(a.created_at))[0]
+    const latestFile = files.sort((a, b) => (b.created_at || '').localeCompare(a.created_at || ''))[0]
     const filePath = `${businessId}/${latestFile.name}`
 
     const { data: urlData } = supabase.storage

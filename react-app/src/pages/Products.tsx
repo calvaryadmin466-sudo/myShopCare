@@ -8,7 +8,7 @@ import { Plus, Search, Edit2, Trash2, X, Package, Camera, Image as ImageIcon, Ca
 
 const UNITS = ['pcs', 'kg', 'g', 'litre', 'ml', 'box', 'pack', 'dozen', 'metre']
 
-const EMPTY: Omit<Product, 'id' | 'shop_id' | 'business_id' | 'created_at' | 'updated_at'> = {
+const EMPTY: Omit<Product, 'id' | 'shop_id' | 'created_at' | 'updated_at'> & Pick<Product, 'business_id'> = {
   name: '', sku: '', description: '', category: 'General', buying_price: 0, selling_price: 0,
   stock_quantity: 0, unit: 'pcs', low_stock_threshold: 5, image_url: '',
   expiry_date: '', expiry_days_alert: 30, business_id: '',

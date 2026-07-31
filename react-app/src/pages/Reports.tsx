@@ -298,7 +298,7 @@ export default function Reports() {
       cur.gross += r.gross_profit
       m.set(key, cur)
     }
-    return Array.from(m.values()).sort((a, b) => b.payment_date.localeCompare(a.payment_date))
+    return Array.from(m.values()).sort((a, b) => (b.payment_date || '').localeCompare(a.payment_date || ''))
   }, [rows])
 
   function exportExcel() {
