@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useState } from 'react'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../contexts/AuthContext'
 import { useLang } from '../contexts/LangContext'
 import type { Expense, Sale, SaleItem } from '../types'
-import { BarChart3, Download, Printer, RefreshCw } from 'lucide-react'
+import { BarChart3, Download, Printer, RefreshCw, FileText } from 'lucide-react'
 import * as XLSX from 'xlsx'
 
 type Period = 'week' | 'month' | 'year'
@@ -85,7 +86,9 @@ function safeDiv(a: number, b: number) {
 export default function Reports() {
   const { profile } = useAuth()
   const { t } = useLang()
-  const [period, setPeriod] = useState<Period>('week')
+  const navigate = useNavigate()
+  const [searchParams] = useSearchParams()
+  const [period, setPeriod] = useState<Period>(searchParams.get('period') as Period || 'week')
   const [view, setView] = useState<View>('product')
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethodFilter>('all')
   const [loading, setLoading] = useState(false)
@@ -104,6 +107,15 @@ export default function Reports() {
   const { start, end } = useMemo(() => rangeForPeriod(period, weekStart, month, year), [period, weekStart, month, year])
 
   useEffect(() => { if (profile) load() }, [profile, period, weekStart, month, year, paymentMethod])
+
+  function goToSalesHistory() {
+    const dateFilterMap: Record<Period, string> = {
+      week: 'week',
+      month: 'month',
+      year: 'all'
+    }
+    navigate(`/sales-history?filter=${dateFilterMap[period]}`)
+  }
 
   async function load() {
     if (!profile) return
@@ -386,6 +398,7 @@ export default function Reports() {
       <div className="page-header no-print">
         <h2><BarChart3 size={18} />{t('profit_loss')}</h2>
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+          <button className="btn btn-ghost" onClick={goToSalesHistory}><FileText size={16} />{t('sales_history')}</button>
           <button className="btn btn-ghost" onClick={load} disabled={loading}><RefreshCw size={16} />{t('refresh')}</button>
           <button className="btn btn-ghost" onClick={() => window.print()}><Printer size={16} />{t('export_pdf')}</button>
           <button className="btn btn-primary" onClick={exportExcel}><Download size={16} />{t('export_excel')}</button>

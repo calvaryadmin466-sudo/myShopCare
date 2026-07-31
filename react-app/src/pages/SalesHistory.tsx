@@ -1,9 +1,10 @@
 import { useEffect, useState } from 'react'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../contexts/AuthContext'
 import { useLang } from '../contexts/LangContext'
 import type { Sale, SaleItem } from '../types'
-import { Calendar, Download, Eye, FileText, Printer, Search, X } from 'lucide-react'
+import { BarChart3, Calendar, Download, Eye, FileText, Printer, Search, X } from 'lucide-react'
 import * as XLSX from 'xlsx'
 
 type SaleWithItems = Sale & { sale_items?: SaleItem[] }
@@ -70,10 +71,12 @@ function TableSkeleton() {
 export default function SalesHistory() {
   const { profile } = useAuth()
   const { t } = useLang()
+  const navigate = useNavigate()
+  const [searchParams] = useSearchParams()
   const [sales, setSales] = useState<SaleWithItems[]>([])
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
-  const [dateFilter, setDateFilter] = useState<DateFilter>('today')
+  const [dateFilter, setDateFilter] = useState<DateFilter>((searchParams.get('filter') as DateFilter) || 'today')
   const [selected, setSelected] = useState<SaleWithItems | null>(null)
 
   useEffect(() => { if (profile) load() }, [profile, dateFilter])
@@ -84,6 +87,16 @@ export default function SalesHistory() {
     if (dateFilter === 'week') d.setDate(d.getDate() - 6)
     if (dateFilter === 'month') d.setDate(d.getDate() - 29)
     return d.toISOString()
+  }
+
+  function goToReports() {
+    const periodMap: Record<DateFilter, string> = {
+      today: 'week',
+      week: 'week',
+      month: 'month',
+      all: 'year'
+    }
+    navigate(`/reports?period=${periodMap[dateFilter]}`)
   }
 
   async function load() {
@@ -121,6 +134,8 @@ export default function SalesHistory() {
   const totalRevenue = filtered.reduce((sum, s) => sum + Number(s.total), 0)
   const totalPaid = filtered.reduce((sum, s) => sum + Number(s.amount_paid), 0)
   const totalItems = filtered.reduce((sum, s) => sum + (s.items || []).reduce((n, i) => n + Number(i.quantity), 0), 0)
+  const totalCOGS = filtered.reduce((sum, s) => sum + (s.items || []).reduce((n, i) => n + Number(i.total_cost || 0), 0), 0)
+  const totalGrossProfit = totalRevenue - totalCOGS
 
   const dateFilters: DateFilter[] = ['today', 'week', 'month', 'all']
 
@@ -182,7 +197,10 @@ export default function SalesHistory() {
     <div>
       <div className="page-header">
         <h2>{t('sales_history')}</h2>
-        <button className="btn btn-ghost" onClick={load}><Calendar size={16} />{t('refresh')}</button>
+        <div style={{ display: 'flex', gap: 8 }}>
+          <button className="btn btn-ghost" onClick={goToReports}><BarChart3 size={16} />{t('reports')}</button>
+          <button className="btn btn-ghost" onClick={load}><Calendar size={16} />{t('refresh')}</button>
+        </div>
       </div>
 
       <div className="stats-grid">
@@ -197,9 +215,9 @@ export default function SalesHistory() {
           <div className="stat-sub">{t('amount')}</div>
         </div>
         <div className="stat-card">
-          <div className="stat-label">{t('amount_paid')}</div>
-          <div className="stat-value" style={{ color: 'var(--blue)' }}>{fmt(totalPaid)} TZS</div>
-          <div className="stat-sub">{t('payment_history')}</div>
+          <div className="stat-label">{t('gross_profit')}</div>
+          <div className="stat-value" style={{ color: 'var(--blue)' }}>{fmt(totalGrossProfit)} TZS</div>
+          <div className="stat-sub">{t('profit')}</div>
         </div>
         <div className="stat-card">
           <div className="stat-label">{t('items_sold')}</div>
