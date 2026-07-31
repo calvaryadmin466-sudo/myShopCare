@@ -4,7 +4,7 @@ import type { OfflineSyncItem } from '../types'
 
 class OfflineSync {
   private isOnline: boolean = true
-  private syncInterval: NodeJS.Timeout | null = null
+  private syncInterval: ReturnType<typeof setInterval> | null = null
   private syncInProgress: boolean = false
 
   constructor() {

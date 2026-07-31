@@ -8,10 +8,10 @@ import { Plus, Search, Edit2, Trash2, X, Package, Camera, Image as ImageIcon, Ca
 
 const UNITS = ['pcs', 'kg', 'g', 'litre', 'ml', 'box', 'pack', 'dozen', 'metre']
 
-const EMPTY: Omit<Product, 'id' | 'shop_id' | 'created_at' | 'updated_at'> = {
+const EMPTY: Omit<Product, 'id' | 'shop_id' | 'business_id' | 'created_at' | 'updated_at'> = {
   name: '', sku: '', description: '', category: 'General', buying_price: 0, selling_price: 0,
   stock_quantity: 0, unit: 'pcs', low_stock_threshold: 5, image_url: '',
-  expiry_date: '', expiry_days_alert: 30,
+  expiry_date: '', expiry_days_alert: 30, business_id: '',
 }
 
 function fmt(n: number) { return new Intl.NumberFormat().format(n) }
@@ -64,13 +64,13 @@ export default function Products() {
   useEffect(() => { if (profile) load() }, [profile])
 
   async function load() {
-    const { data } = await supabase.from('products').select('*').eq('shop_id', profile!.shop_id).order('name')
+    const { data } = await supabase.from('products').select('*').eq('business_id', profile!.business_id || profile!.shop_id).order('name')
     setProducts(data as Product[] || [])
     setLoading(false)
   }
 
   function openAdd() { setForm({ ...EMPTY }); setEditing(null); setModal('add'); setError('') }
-  function openEdit(p: Product) { setForm({ name: p.name, sku: p.sku || '', description: p.description || '', category: p.category, buying_price: p.buying_price, selling_price: p.selling_price, stock_quantity: p.stock_quantity, unit: p.unit, low_stock_threshold: p.low_stock_threshold, image_url: p.image_url || '', expiry_date: p.expiry_date || '', expiry_days_alert: p.expiry_days_alert ?? 30 }); setEditing(p); setModal('edit'); setError('') }
+  function openEdit(p: Product) { setForm({ name: p.name, sku: p.sku || '', description: p.description || '', category: p.category, buying_price: p.buying_price, selling_price: p.selling_price, stock_quantity: p.stock_quantity, unit: p.unit, low_stock_threshold: p.low_stock_threshold, image_url: p.image_url || '', expiry_date: p.expiry_date || '', expiry_days_alert: p.expiry_days_alert ?? 30, business_id: p.business_id || p.shop_id || '' }); setEditing(p); setModal('edit'); setError('') }
 
   async function pickImage(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
@@ -78,7 +78,7 @@ export default function Products() {
     if (!file) return
     setUploading(true); setError('')
     try {
-      const url = await uploadProductImage(file, profile!.shop_id)
+      const url = await uploadProductImage(file, profile!.business_id || profile!.shop_id || '')
       setForm(f => ({ ...f, image_url: url }))
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Image upload failed')

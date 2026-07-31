@@ -118,7 +118,7 @@ export default function BusinessManagement() {
 
     try {
       await deleteBusinessLogo(business.id)
-      await updateBusiness(business.id, { logo_url: null })
+      await updateBusiness(business.id, { logo_url: undefined })
       await refreshBusinesses()
     } finally {
       setLoading(false)
