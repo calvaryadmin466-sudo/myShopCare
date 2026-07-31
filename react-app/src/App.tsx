@@ -39,10 +39,10 @@ function LoadingScreen() {
 }
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
-  const { user, loading, accessLoading, accessAllowed } = useAuth()
+  const { user, loading, accessLoading, accessAllowed, accessReason } = useAuth()
   if (loading || accessLoading) return <LoadingScreen />
   if (!user) return <Navigate to="/auth" replace />
-  if (!accessAllowed) return <div className="loading-screen"><div style={{ textAlign: 'center', maxWidth: 380 }}><h2 style={{ color: 'var(--accent)', marginBottom: 10 }}>Access paused</h2><p style={{ color: 'var(--text3)' }}>Your myShopCare access is not active. Please contact the administrator.</p></div></div>
+  if (!accessAllowed) return <div className="loading-screen"><div style={{ textAlign: 'center', maxWidth: 380 }}><h2 style={{ color: 'var(--accent)', marginBottom: 10 }}>Access paused</h2><p style={{ color: 'var(--text3)' }}>Your myShopCare access is not active. Please contact the administrator.</p>{accessReason && <p style={{ color: 'var(--text3)', fontSize: '0.75rem', marginTop: 12 }}>Check: {accessReason}</p>}</div></div>
   return <>{children}</>
 }
 
