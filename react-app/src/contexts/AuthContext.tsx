@@ -50,6 +50,25 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         // Create default profile if it doesn't exist
         const { data: userData } = await supabase.auth.getUser()
         if (userData?.user) {
+          // First create a default business
+          const { data: newBusiness, error: businessError } = await supabase
+            .from('businesses')
+            .insert({
+              name: userData.user.user_metadata?.shop_name || 'My Business',
+              owner_id: uid,
+              theme_color: '#3b82f6',
+              currency: 'USD'
+            })
+            .select()
+            .single()
+
+          if (businessError) {
+            console.error('AuthContext: Error creating business:', businessError)
+            setProfile(null)
+            return
+          }
+
+          // Then create profile with business_id
           const { data: newProfile, error: insertError } = await supabase
             .from('profiles')
             .insert({
@@ -57,11 +76,23 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
               email: userData.user.email || '',
               full_name: userData.user.user_metadata?.full_name || 'User',
               shop_name: userData.user.user_metadata?.shop_name || 'My Shop',
+              business_id: newBusiness.id,
               role: 'owner'
             })
             .select()
             .single()
-          
+
+          // Add user as owner of the business
+          if (!insertError) {
+            await supabase
+              .from('business_users')
+              .insert({
+                business_id: newBusiness.id,
+                user_id: uid,
+                role: 'owner'
+              })
+          }
+
           if (insertError) {
             console.error('AuthContext: Error creating profile:', insertError)
             setProfile(null)
