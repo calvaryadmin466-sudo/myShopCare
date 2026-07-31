@@ -22,14 +22,15 @@ export function useNotifications() {
   const [loading, setLoading] = useState(true)
 
   const loadNotifications = useCallback(async () => {
-    if (!profile?.shop_id) return
+    const businessId = profile?.business_id || profile?.shop_id
+    if (!businessId) return
     setLoading(true)
 
     // Fetch all products to evaluate stock and expiry thresholds
     const { data, error } = await supabase
       .from('products')
       .select('id, name, category, stock_quantity, low_stock_threshold, unit, expiry_date, expiry_days_alert')
-      .eq('shop_id', profile.shop_id)
+      .eq('business_id', businessId)
       .order('name')
 
     if (error) {
@@ -82,24 +83,21 @@ export function useNotifications() {
 
     setNotifications(list)
     setLoading(false)
-  }, [profile?.shop_id])
+  }, [profile?.business_id, profile?.shop_id])
 
   useEffect(() => {
-    const shopId = profile?.shop_id
-    if (!shopId) {
+    const businessId = profile?.business_id || profile?.shop_id
+    if (!businessId) {
       setNotifications([])
       setLoading(false)
       return
     }
 
-    loadNotifications()
-
-    // Keep the bell current when products are added, sold, or edited elsewhere.
     const channel = supabase
-      .channel(`product-notifications:${shopId}`)
+      .channel(`product-notifications:${businessId}`)
       .on(
         'postgres_changes',
-        { event: '*', schema: 'public', table: 'products', filter: `shop_id=eq.${shopId}` },
+        { event: '*', schema: 'public', table: 'products', filter: `business_id=eq.${businessId}` },
         loadNotifications,
       )
       .subscribe()
@@ -111,7 +109,7 @@ export function useNotifications() {
       window.clearInterval(refreshTimer)
       supabase.removeChannel(channel)
     }
-  }, [profile?.shop_id, loadNotifications])
+  }, [profile?.business_id, profile?.shop_id, loadNotifications])
 
   return { notifications, loading, refetch: loadNotifications }
 }

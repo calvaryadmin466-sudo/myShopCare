@@ -43,8 +43,8 @@ export default function POS() {
 
   async function load() {
     const [productsRes, workersRes] = await Promise.all([
-      supabase.from('products').select('*').eq('shop_id', profile!.shop_id).gt('stock_quantity', 0).order('name'),
-      supabase.from('workers').select('*').eq('shop_id', profile!.shop_id).eq('is_active', true).order('name'),
+      supabase.from('products').select('*').eq('business_id', profile!.business_id || profile!.shop_id).gt('stock_quantity', 0).order('name'),
+      supabase.from('workers').select('*').eq('business_id', profile!.business_id || profile!.shop_id).eq('is_active', true).order('name'),
     ])
     const activeWorkers = workersRes.data as Worker[] || []
     setProducts(productsRes.data as Product[] || [])
@@ -82,7 +82,7 @@ export default function POS() {
     setProcessing(true)
 
     const saleData = {
-      shop_id: profile!.shop_id,
+      business_id: profile!.business_id || profile!.shop_id,
       cashier_id: user!.id,
       cashier_worker_id: selectedWorker?.id || null,
       cashier_name: sellerName,
@@ -126,7 +126,7 @@ export default function POS() {
     // If credit, create debt
     if (payment.method === 'credit' && customer.name) {
       const { error: debtError } = await supabase.from('debts').insert({
-        shop_id: profile!.shop_id,
+        business_id: profile!.business_id || profile!.shop_id,
         customer_name: customer.name,
         customer_phone: customer.phone || null,
         original_amount: total,

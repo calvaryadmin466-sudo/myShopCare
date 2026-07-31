@@ -68,37 +68,37 @@ export default function Dashboard() {
   }, [profile?.id])
 
   async function loadStats() {
-    if (!profile?.shop_id) {
-      console.error('Dashboard: profile.shop_id is missing', profile)
-      setError('Shop information not found. Please contact support.')
+    const businessId = profile?.business_id || profile?.shop_id
+    if (!businessId) {
+      console.error('Dashboard: business_id is missing', profile)
+      setError('Business information not found. Please contact support.')
       setLoading(false)
       return
     }
-    
+
     // Cancel previous request if still in flight
     if (abortControllerRef.current) {
       abortControllerRef.current.abort()
     }
-    
+
     const controller = new AbortController()
     abortControllerRef.current = controller
-    
+
     setLoading(true)
     setError(null)
-    
+
     try {
-      const shopId = profile.shop_id
       const today = new Date().toISOString().split('T')[0]
       const weekAgo = new Date(Date.now() - 7 * 86400000).toISOString().split('T')[0]
 
       const [todaySalesRes, productsRes, debtsRes, weekSalesRes, topProductsRes] = await Promise.all([
-        supabase.from('sales').select('id, total').eq('shop_id', shopId).gte('created_at', today),
-        supabase.from('products').select('id, stock_quantity, low_stock_threshold').eq('shop_id', shopId),
-        supabase.from('debts').select('balance').eq('shop_id', shopId).eq('status', 'active'),
-        supabase.from('sales').select('created_at, total').eq('shop_id', shopId).gte('created_at', weekAgo).order('created_at'),
+        supabase.from('sales').select('id, total').eq('business_id', businessId).gte('created_at', today),
+        supabase.from('products').select('id, stock_quantity, low_stock_threshold').eq('business_id', businessId),
+        supabase.from('debts').select('balance').eq('business_id', businessId).eq('status', 'active'),
+        supabase.from('sales').select('created_at, total').eq('business_id', businessId).gte('created_at', weekAgo).order('created_at'),
         supabase.from('sale_items')
-          .select('product_name, quantity, total_price, sale_id, sales!inner(shop_id)')
-          .eq('sales.shop_id', shopId)
+          .select('product_name, quantity, total_price, sale_id, sales!inner(business_id)')
+          .eq('sales.business_id', businessId)
           .limit(200),
       ])
 

@@ -57,7 +57,7 @@ export default function Expenses() {
     const { data, error } = await supabase
       .from('expenses')
       .select('*')
-      .eq('shop_id', profile.shop_id)
+      .eq('business_id', profile.business_id || profile.shop_id)
       .order('expense_date', { ascending: false })
       .limit(300)
     if (error) {
@@ -93,7 +93,7 @@ export default function Expenses() {
     if (!form.category || !form.expense_date) return
     setSaving(true)
     const payload = {
-      shop_id: profile.shop_id,
+      business_id: profile.business_id || profile.shop_id,
       category: form.category,
       description: form.description || null,
       amount: +form.amount || 0,

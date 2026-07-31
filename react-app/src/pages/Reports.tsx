@@ -115,8 +115,8 @@ export default function Reports() {
 
     const { data: salesData, error: salesError } = await supabase
       .from('sales')
-      .select('id,created_at,payment_method,payment_status,amount_paid,change_given,total,customer_name,cashier_name,shop_id,sale_items(id,product_id,product_name,quantity,unit_price,total_price,unit_cost,total_cost)')
-      .eq('shop_id', profile.shop_id)
+      .select('id,created_at,payment_method,payment_status,amount_paid,change_given,total,customer_name,cashier_name,business_id,sale_items(id,product_id,product_name,quantity,unit_price,total_price,unit_cost,total_cost)')
+      .eq('business_id', profile.business_id || profile.shop_id)
       .gte('created_at', startIso)
       .lt('created_at', endIso)
       .order('created_at', { ascending: false })
@@ -132,36 +132,36 @@ export default function Reports() {
 
     const { data: debtPaymentsData, error: debtPaymentsError } = await supabase
       .from('debt_payments')
-      .select('id,amount,payment_method,created_at,debt:debts(id,shop_id,sale_id)')
+      .select('id,amount,payment_method,created_at,debt:debts(id,business_id,sale_id)')
       .gte('created_at', startIso)
       .lt('created_at', endIso)
       .order('created_at', { ascending: false })
-      .limit(2000)
 
     if (debtPaymentsError) console.error('Error loading debt payments for reports:', debtPaymentsError)
 
+    const businessId = profile.business_id || profile.shop_id
     const debtPayments = ((debtPaymentsData || []) as any[])
-      .filter(p => p?.debt?.shop_id === profile.shop_id)
+      .filter(p => p?.debt?.business_id === businessId)
       .filter(p => !pmFilter || p.payment_method === pmFilter)
 
     const debtSaleIds = Array.from(new Set(debtPayments.map(p => p?.debt?.sale_id).filter(Boolean)))
 
-    const debtSalesMap = new Map<string, SaleWithItems>()
+    let debtSales: SaleWithItems[] = []
     if (debtSaleIds.length > 0) {
       const { data: ds, error: dsError } = await supabase
         .from('sales')
-        .select('id,created_at,payment_method,payment_status,amount_paid,change_given,total,customer_name,cashier_name,shop_id,sale_items(id,product_id,product_name,quantity,unit_price,total_price,unit_cost,total_cost)')
-        .eq('shop_id', profile.shop_id)
+        .select('id,created_at,payment_method,payment_status,amount_paid,change_given,total,customer_name,cashier_name,business_id,sale_items(id,product_id,product_name,quantity,unit_price,total_price,unit_cost,total_cost)')
+        .eq('business_id', businessId)
         .in('id', debtSaleIds)
         .limit(2000)
       if (dsError) console.error('Error loading debt sales for reports:', dsError)
-      ;((ds as SaleWithItems[]) || []).forEach(s => debtSalesMap.set(s.id, s))
+      debtSales = ((ds as SaleWithItems[]) || []).filter(s => s.payment_status === 'pending' || s.payment_status === 'partial')
     }
 
     const { data: expensesData, error: expensesError } = await supabase
       .from('expenses')
       .select('*')
-      .eq('shop_id', profile.shop_id)
+      .eq('business_id', businessId)
       .gte('expense_date', startIso)
       .lt('expense_date', endIso)
       .order('expense_date', { ascending: false })
@@ -180,7 +180,7 @@ export default function Reports() {
       const { data: productsData, error: productsError } = await supabase
         .from('products')
         .select('id,category')
-        .eq('shop_id', profile.shop_id)
+        .eq('business_id', businessId)
         .in('id', productIds)
         .limit(5000)
       if (productsError) console.error('Error loading product categories:', productsError)

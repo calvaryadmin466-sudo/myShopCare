@@ -29,7 +29,7 @@ export default function Settings() {
     const { data, error } = await supabase
       .from('workers')
       .select('*')
-      .eq('shop_id', profile.shop_id)
+      .eq('business_id', profile.business_id || profile.shop_id)
       .order('is_active', { ascending: false })
       .order('name')
 
@@ -66,7 +66,7 @@ export default function Settings() {
     setWorkerSaving(true)
 
     const { error } = await supabase.from('workers').insert({
-      shop_id: profile.shop_id,
+      business_id: profile.business_id || profile.shop_id,
       name: workerForm.name.trim(),
       phone: workerForm.phone.trim() || null,
       role: workerForm.role.trim() || 'seller',

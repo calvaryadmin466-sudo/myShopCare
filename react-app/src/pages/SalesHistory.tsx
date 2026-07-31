@@ -93,7 +93,7 @@ export default function SalesHistory() {
     let query = supabase
       .from('sales')
       .select('*, sale_items(*)')
-      .eq('shop_id', profile.shop_id)
+      .eq('business_id', profile.business_id || profile.shop_id)
       .order('created_at', { ascending: false })
       .limit(200)
 

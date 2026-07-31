@@ -57,7 +57,7 @@ export default function Debts() {
   useEffect(() => { if (profile) load() }, [profile])
 
   async function load() {
-    const { data } = await supabase.from('debts').select('*').eq('shop_id', profile!.shop_id).order('created_at', { ascending: false })
+    const { data } = await supabase.from('debts').select('*').eq('business_id', profile!.business_id || profile!.shop_id).order('created_at', { ascending: false })
     setDebts(data as Debt[] || [])
     setLoading(false)
   }
@@ -74,7 +74,7 @@ export default function Debts() {
       ...addForm,
       original_amount: +addForm.original_amount,
       amount_paid: 0,
-      shop_id: profile!.shop_id,
+      business_id: profile!.business_id || profile!.shop_id,
       status: 'active'
     })
     setSaving(false)
