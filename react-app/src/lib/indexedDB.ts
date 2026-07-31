@@ -28,7 +28,7 @@ class IndexedDB {
     if (this.db) return
 
     this.initPromise = new Promise((resolve, reject) => {
-      const request = indexedDB.open(DB_NAME, DB_VERSION)
+      const request = (window.indexedDB as IDBFactory).open(DB_NAME, DB_VERSION)
 
       request.onerror = () => reject(request.error)
       request.onsuccess = () => {
@@ -36,7 +36,7 @@ class IndexedDB {
         resolve()
       }
 
-      request.onupgradeneeded = (event) => {
+      request.onupgradeneeded = (event: IDBVersionChangeEvent) => {
         const db = (event.target as IDBOpenDBRequest).result
 
         // Create object stores for each data type
