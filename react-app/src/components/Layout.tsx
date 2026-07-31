@@ -1,11 +1,14 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Outlet, NavLink, useNavigate } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
 import { useLang } from '../contexts/LangContext'
 import { useTheme } from '../contexts/ThemeContext'
+import { useBusiness } from '../contexts/BusinessContext'
+import { offlineSync } from '../lib/offlineSync'
 import {
   LayoutDashboard, Package, ShoppingCart, CreditCard,
-  Tag, Settings, LogOut, X, Menu, Store, History, Moon, Sun, BarChart3, Receipt
+  Tag, Settings, LogOut, X, Menu, Store, History, Moon, Sun, BarChart3, Receipt,
+  Building2, ChevronDown, Wifi, WifiOff, Building
 } from 'lucide-react'
 import { ExpiryNotificationBell } from './ExpiryNotificationBell'
 
@@ -13,8 +16,11 @@ export default function Layout() {
   const { profile, signOut } = useAuth()
   const { t, lang, setLang } = useLang()
   const { theme, toggleTheme } = useTheme()
+  const { businesses, currentBusiness, setCurrentBusiness } = useBusiness()
   const navigate = useNavigate()
   const [sidebarOpen, setSidebarOpen] = useState(false)
+  const [businessDropdownOpen, setBusinessDropdownOpen] = useState(false)
+  const [isOnline, setIsOnline] = useState(true)
 
   async function handleLogout() {
     await signOut()
@@ -30,8 +36,25 @@ export default function Layout() {
     { to: '/expenses', icon: <Receipt />, label: t('expenses') },
     { to: '/debts', icon: <CreditCard />, label: t('debts') },
     { to: '/deals', icon: <Tag />, label: t('deals') },
+    { to: '/businesses', icon: <Building2 />, label: 'Businesses' },
     { to: '/settings', icon: <Settings />, label: t('settings') },
   ]
+
+  // Monitor online status
+  useEffect(() => {
+    setIsOnline(offlineSync.getOnlineStatus())
+    
+    const handleOnline = () => setIsOnline(true)
+    const handleOffline = () => setIsOnline(false)
+    
+    window.addEventListener('online', handleOnline)
+    window.addEventListener('offline', handleOffline)
+    
+    return () => {
+      window.removeEventListener('online', handleOnline)
+      window.removeEventListener('offline', handleOffline)
+    }
+  }, [])
 
   return (
     <div className="app-layout">
@@ -65,10 +88,55 @@ export default function Layout() {
         </nav>
 
         <div className="sidebar-bottom">
+          {/* Business Selector */}
+          {businesses.length > 0 && (
+            <div className="business-selector">
+              <button
+                className="business-selector-btn"
+                onClick={() => setBusinessDropdownOpen(!businessDropdownOpen)}
+              >
+                <div className="business-info">
+                  {currentBusiness?.logo_url ? (
+                    <img src={currentBusiness.logo_url} alt="" className="business-logo" />
+                  ) : (
+                    <Building size={20} className="business-icon" />
+                  )}
+                  <span className="business-name">{currentBusiness?.name || 'Select Business'}</span>
+                </div>
+                <ChevronDown size={16} />
+              </button>
+              
+              {businessDropdownOpen && (
+                <div className="business-dropdown">
+                  {businesses.map((business) => (
+                    <button
+                      key={business.id}
+                      className={`business-option ${currentBusiness?.id === business.id ? 'active' : ''}`}
+                      onClick={() => {
+                        setCurrentBusiness(business)
+                        setBusinessDropdownOpen(false)
+                      }}
+                    >
+                      {business.logo_url ? (
+                        <img src={business.logo_url} alt="" className="business-logo-small" />
+                      ) : (
+                        <Building size={16} />
+                      )}
+                      <span>{business.name}</span>
+                      {currentBusiness?.id === business.id && (
+                        <div className="business-active-indicator" />
+                      )}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+          
           {profile && (
             <div className="shop-badge">
-              <div className="name">{profile.shop_name}</div>
-              <div className="role">{profile.full_name} · {profile.role}</div>
+              <div className="name">{profile.full_name}</div>
+              <div className="role">{profile.role}</div>
             </div>
           )}
           <button className="nav-item btn-ghost" style={{ width: '100%', border: 'none', cursor: 'pointer' }} onClick={handleLogout}>
@@ -88,6 +156,11 @@ export default function Layout() {
             <h2>{profile?.shop_name || 'myShopCare'}</h2>
           </div>
           <div className="topbar-right">
+              {/* Connection Status Indicator */}
+              <div className={`connection-status ${isOnline ? 'online' : 'offline'}`} title={isOnline ? 'Online' : 'Offline'}>
+                {isOnline ? <Wifi size={16} /> : <WifiOff size={16} />}
+                <span className="connection-text">{isOnline ? 'Online' : 'Offline'}</span>
+              </div>
               <ExpiryNotificationBell />
               <button className="theme-toggle" onClick={toggleTheme} aria-label="Toggle theme">
                 {theme === 'light' ? <Moon size={15} /> : <Sun size={15} />}

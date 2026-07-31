@@ -4,14 +4,36 @@ export interface Profile {
   email: string;
   full_name: string;
   shop_name: string;
-  shop_id: string;
+  shop_id?: string; // Deprecated, use business_id
+  business_id?: string;
   role: 'owner' | 'cashier' | 'manager';
+  created_at: string;
+}
+
+export interface Business {
+  id: string;
+  name: string;
+  logo_url?: string;
+  theme_color: string;
+  currency: 'USD' | 'TZS' | 'KSH';
+  owner_id: string;
+  created_at: string;
+  updated_at: string;
+  _role?: 'owner' | 'manager' | 'cashier'; // Internal use for user's role in this business
+}
+
+export interface BusinessUser {
+  id: string;
+  business_id: string;
+  user_id: string;
+  role: 'owner' | 'manager' | 'cashier';
   created_at: string;
 }
 
 export interface Worker {
   id: string;
-  shop_id: string;
+  shop_id?: string; // Deprecated, use business_id
+  business_id: string;
   name: string;
   phone?: string;
   role: string;
@@ -22,7 +44,8 @@ export interface Worker {
 // ─── Products ─────────────────────────────────────────────────
 export interface Product {
   id: string;
-  shop_id: string;
+  shop_id?: string; // Deprecated, use business_id
+  business_id: string;
   name: string;
   sku: string;
   description?: string;
@@ -42,7 +65,8 @@ export interface Product {
 // ─── Sales / POS ──────────────────────────────────────────────
 export interface Sale {
   id: string;
-  shop_id: string;
+  shop_id?: string; // Deprecated, use business_id
+  business_id: string;
   cashier_id: string;
   cashier_worker_id?: string;
   cashier_name?: string;
@@ -79,7 +103,8 @@ export interface CartItem extends Product {
 // ─── Debts ────────────────────────────────────────────────────
 export interface Debt {
   id: string;
-  shop_id: string;
+  shop_id?: string; // Deprecated, use business_id
+  business_id: string;
   customer_name: string;
   customer_phone?: string;
   original_amount: number;
@@ -105,7 +130,8 @@ export interface DebtPayment {
 
 export interface Expense {
   id: string;
-  shop_id: string;
+  shop_id?: string; // Deprecated, use business_id
+  business_id: string;
   category: string;
   description?: string;
   amount: number;
@@ -117,7 +143,8 @@ export interface Expense {
 // ─── Deals / Promotions ───────────────────────────────────────
 export interface Deal {
   id: string;
-  shop_id: string;
+  shop_id?: string; // Deprecated, use business_id
+  business_id: string;
   name: string;
   description?: string;
   deal_type: 'percentage' | 'fixed' | 'bogo' | 'bundle';
@@ -148,4 +175,18 @@ export type Lang = 'en' | 'sw';
 
 export interface Translations {
   [key: string]: string;
+}
+
+// ─── Offline Sync ───────────────────────────────────────────────
+export interface OfflineSyncItem {
+  id: string;
+  business_id: string;
+  user_id: string;
+  table_name: string;
+  operation: 'insert' | 'update' | 'delete';
+  record_id?: string;
+  record_data: any;
+  created_at: string;
+  synced_at?: string;
+  sync_status: 'pending' | 'synced' | 'failed';
 }

@@ -713,3 +713,147 @@ tbody tr:last-child { border-bottom: none; }
   from { opacity: 0; transform: translateY(24px) scale(0.94); }
   to   { opacity: 1; transform: translateY(0) scale(1); }
 }
+
+/* ─── Business Selector ─────────────────────────────────────────── */
+.business-selector {
+  position: relative;
+  margin-bottom: 12px;
+}
+
+.business-selector-btn {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  padding: 10px 12px;
+  background: var(--bg3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.business-selector-btn:hover {
+  border-color: var(--accent);
+  background: var(--bg2);
+}
+
+.business-info {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex: 1;
+  min-width: 0;
+}
+
+.business-logo {
+  width: 32px;
+  height: 32px;
+  border-radius: 6px;
+  object-fit: cover;
+  flex-shrink: 0;
+}
+
+.business-icon {
+  color: var(--accent);
+  flex-shrink: 0;
+}
+
+.business-name {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.business-dropdown {
+  position: absolute;
+  bottom: calc(100% + 4px);
+  left: 0;
+  right: 0;
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  z-index: 10;
+  max-height: 300px;
+  overflow-y: auto;
+}
+
+.business-option {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 10px 12px;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  transition: background 0.15s;
+  position: relative;
+}
+
+.business-option:hover {
+  background: var(--bg3);
+}
+
+.business-option.active {
+  background: var(--accent-light);
+}
+
+.business-logo-small {
+  width: 24px;
+  height: 24px;
+  border-radius: 4px;
+  object-fit: cover;
+  flex-shrink: 0;
+}
+
+.business-option span {
+  font-size: 0.85rem;
+  color: var(--text);
+  flex: 1;
+  text-align: left;
+}
+
+.business-active-indicator {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--accent);
+  flex-shrink: 0;
+}
+
+/* ─── Connection Status ─────────────────────────────────────────── */
+.connection-status {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  border-radius: var(--radius);
+  font-size: 0.75rem;
+  font-weight: 600;
+  transition: all 0.15s;
+}
+
+.connection-status.online {
+  background: var(--green-light);
+  color: var(--green);
+}
+
+.connection-status.offline {
+  background: var(--red-light);
+  color: var(--red);
+}
+
+.connection-text {
+  display: none;
+}
+
+@media (min-width: 768px) {
+  .connection-text {
+    display: inline;
+  }
+}

@@ -3,6 +3,8 @@ import { ShoppingCart } from 'lucide-react'
 import { AuthProvider, useAuth } from './contexts/AuthContext'
 import { LangProvider } from './contexts/LangContext'
 import { ThemeProvider } from './contexts/ThemeContext'
+import { BusinessProvider } from './contexts/BusinessContext'
+import { DynamicThemeProvider } from './contexts/DynamicThemeContext'
 import Layout from './components/Layout'
 import AuthPage from './pages/AuthPage'
 import Dashboard from './pages/Dashboard'
@@ -14,6 +16,7 @@ import Debts from './pages/Debts'
 import Deals from './pages/Deals'
 import Settings from './pages/Settings'
 import Reports from './pages/Reports'
+import BusinessManagement from './pages/BusinessManagement'
 
 function LoadingScreen() {
   return (
@@ -56,20 +59,25 @@ export default function App() {
       <AuthProvider>
         <ThemeProvider>
           <LangProvider>
-            <Routes>
-              <Route path="/auth" element={<PublicRoute><AuthPage /></PublicRoute>} />
-              <Route path="/" element={<ProtectedRoute><Layout /></ProtectedRoute>}>
-                <Route index element={<Dashboard />} />
-                <Route path="products" element={<Products />} />
-                <Route path="sales" element={<POS />} />
-                <Route path="sales-history" element={<SalesHistory />} />
-                <Route path="reports" element={<Reports />} />
-                <Route path="expenses" element={<Expenses />} />
-                <Route path="debts" element={<Debts />} />
-                <Route path="deals" element={<Deals />} />
-                <Route path="settings" element={<Settings />} />
-              </Route>
-            </Routes>
+            <BusinessProvider>
+              <DynamicThemeProvider>
+                <Routes>
+                  <Route path="/auth" element={<PublicRoute><AuthPage /></PublicRoute>} />
+                  <Route path="/" element={<ProtectedRoute><Layout /></ProtectedRoute>}>
+                    <Route index element={<Dashboard />} />
+                    <Route path="products" element={<Products />} />
+                    <Route path="sales" element={<POS />} />
+                    <Route path="sales-history" element={<SalesHistory />} />
+                    <Route path="reports" element={<Reports />} />
+                    <Route path="expenses" element={<Expenses />} />
+                    <Route path="debts" element={<Debts />} />
+                    <Route path="deals" element={<Deals />} />
+                    <Route path="businesses" element={<BusinessManagement />} />
+                    <Route path="settings" element={<Settings />} />
+                  </Route>
+                </Routes>
+              </DynamicThemeProvider>
+            </BusinessProvider>
           </LangProvider>
         </ThemeProvider>
       </AuthProvider>
