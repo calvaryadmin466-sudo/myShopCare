@@ -147,6 +147,7 @@ export default function Reports() {
     const debtSaleIds = Array.from(new Set(debtPayments.map(p => p?.debt?.sale_id).filter(Boolean)))
 
     let debtSales: SaleWithItems[] = []
+    const debtSalesMap = new Map<string, SaleWithItems>()
     if (debtSaleIds.length > 0) {
       const { data: ds, error: dsError } = await supabase
         .from('sales')
@@ -156,6 +157,7 @@ export default function Reports() {
         .limit(2000)
       if (dsError) console.error('Error loading debt sales for reports:', dsError)
       debtSales = ((ds as SaleWithItems[]) || []).filter(s => s.payment_status === 'pending' || s.payment_status === 'partial')
+      debtSales.forEach(s => debtSalesMap.set(s.id, s))
     }
 
     const { data: expensesData, error: expensesError } = await supabase
@@ -173,8 +175,8 @@ export default function Reports() {
 
     const categories = new Map<string, string>()
     const productIds = Array.from(new Set([
-      ...sales.flatMap(s => (s.sale_items || []).map(i => i.product_id).filter(Boolean)),
-      ...debtSaleIds.flatMap(id => (debtSalesMap.get(id)?.sale_items || []).map(i => i.product_id).filter(Boolean)),
+      ...sales.flatMap(s => (s.sale_items || []).map((i: SaleItem) => i.product_id).filter(Boolean)),
+      ...debtSaleIds.flatMap(id => (debtSalesMap.get(id)?.sale_items || []).map((i: SaleItem) => i.product_id).filter(Boolean)),
     ]))
     if (productIds.length > 0) {
       const { data: productsData, error: productsError } = await supabase
