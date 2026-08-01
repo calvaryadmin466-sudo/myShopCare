@@ -25,16 +25,63 @@ export default function BusinessManagement() {
   const { businesses, currentBusiness, createBusiness, updateBusiness, deleteBusiness, refreshBusinesses } = useBusiness()
   const { user } = useAuth()
   const [showCreateModal, setShowCreateModal] = useState(false)
-  const [showEditDrawer, setShowEditDrawer] = useState(false)
+  const [showEditModal, setShowEditModal] = useState(false)
+  const [showSettingsModal, setShowSettingsModal] = useState(false)
+  const [showLogoUploadModal, setShowLogoUploadModal] = useState(false)
   const [editingBusiness, setEditingBusiness] = useState<any>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [uploadProgress, setUploadProgress] = useState(0)
+  const [isUploading, setIsUploading] = useState(false)
+  const fileInputRef = useRef<HTMLInputElement>(null)
 
   const [formData, setFormData] = useState({
     name: '',
     themeColor: '#F7B23B',
     currency: 'TZS' as 'USD' | 'TZS' | 'KSH'
   })
+
+  const handleLogoUpload = async (e: React.ChangeEvent<HTMLInputElement>, business: any) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+
+    if (file.size > 5 * 1024 * 1024) {
+      setError('File size must be less than 5MB')
+      return
+    }
+
+    setIsUploading(true)
+    setUploadProgress(0)
+
+    const progressInterval = setInterval(() => {
+      setUploadProgress(prev => {
+        if (prev >= 90) {
+          clearInterval(progressInterval)
+          return 90
+        }
+        return prev + 10
+      })
+    }, 100)
+
+    try {
+      const result = await uploadBusinessLogo(file, business.id)
+      clearInterval(progressInterval)
+      setUploadProgress(100)
+      
+      if (result.error) {
+        setError(result.error)
+      } else {
+        await updateBusiness(business.id, { logo_url: result.url })
+        await refreshBusinesses()
+      }
+    } finally {
+      setTimeout(() => {
+        setIsUploading(false)
+        setUploadProgress(0)
+        setShowLogoUploadModal(false)
+      }, 500)
+    }
+  }
 
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -73,7 +120,7 @@ export default function BusinessManagement() {
       if (result.error) {
         setError(result.error)
       } else {
-        setShowEditDrawer(false)
+        setShowEditModal(false)
         setEditingBusiness(null)
         await refreshBusinesses()
       }
@@ -102,14 +149,14 @@ export default function BusinessManagement() {
     }
   }
 
-  const openEditDrawer = (business: any) => {
+  const openEditModal = (business: any) => {
     setEditingBusiness(business)
     setFormData({
       name: business.name,
       themeColor: business.theme_color,
       currency: business.currency
     })
-    setShowEditDrawer(true)
+    setShowEditModal(true)
   }
 
   const colorOptions = [
@@ -129,7 +176,7 @@ export default function BusinessManagement() {
       animate={{ opacity: 1, y: 0 }}
       className="flex flex-col items-center justify-center py-20 px-6"
     >
-      <div className="w-24 h-24 mb-6 rounded-full bg-[#1C2234] border border-[#2E3654] flex items-center justify-center">
+      <div className="w-24 h-24 mb-6 rounded-full bg-[var(--bg2)] border border-[var(--border)] flex items-center justify-center">
         <Building2 size={48} style={{ color: 'var(--accent)' }} />
       </div>
       <h2 className="text-2xl font-bold mb-2">No Businesses Yet</h2>
@@ -148,72 +195,6 @@ export default function BusinessManagement() {
   )
 
   const BusinessCard = ({ business }: { business: any }) => {
-    const [uploadProgress, setUploadProgress] = useState(0)
-    const [isUploading, setIsUploading] = useState(false)
-    const [showLogoUpload, setShowLogoUpload] = useState(false)
-    const fileInputRef = useRef<HTMLInputElement>(null)
-
-    const handleLogoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-      const file = e.target.files?.[0]
-      if (!file) return
-
-      if (file.size > 5 * 1024 * 1024) {
-        setError('File size must be less than 5MB')
-        return
-      }
-
-      setIsUploading(true)
-      setUploadProgress(0)
-
-      const progressInterval = setInterval(() => {
-        setUploadProgress(prev => {
-          if (prev >= 90) {
-            clearInterval(progressInterval)
-            return 90
-          }
-          return prev + 10
-        })
-      }, 100)
-
-      try {
-        const result = await uploadBusinessLogo(file, business.id)
-        clearInterval(progressInterval)
-        setUploadProgress(100)
-        
-        if (result.error) {
-          setError(result.error)
-        } else {
-          await updateBusiness(business.id, { logo_url: result.url })
-          await refreshBusinesses()
-        }
-      } finally {
-        setTimeout(() => {
-          setIsUploading(false)
-          setUploadProgress(0)
-          setShowLogoUpload(false)
-        }, 500)
-      }
-    }
-
-    const handleDragOver = (e: React.DragEvent) => {
-      e.preventDefault()
-      e.stopPropagation()
-    }
-
-    const handleDrop = async (e: React.DragEvent) => {
-      e.preventDefault()
-      e.stopPropagation()
-      
-      const file = e.dataTransfer.files[0]
-      if (file && file.type.startsWith('image/')) {
-        const input = document.createElement('input')
-        input.type = 'file'
-        input.accept = 'image/*'
-        input.files = e.dataTransfer.files
-        handleLogoUpload({ target: input } as any)
-      }
-    }
-
     const isActive = currentBusiness?.id === business.id
 
     return (
@@ -223,13 +204,6 @@ export default function BusinessManagement() {
         whileHover={{ y: -3 }}
         transition={{ duration: 0.3 }}
         className="card"
-        style={{
-          background: '#1C2234',
-          border: '1px solid #2E3654',
-          borderRadius: '20px',
-          padding: '32px',
-          boxShadow: '0 4px 20px rgba(0, 0, 0, 0.3)'
-        }}
       >
         {/* Header */}
         <div className="flex items-start justify-between mb-6">
@@ -274,14 +248,6 @@ export default function BusinessManagement() {
             <span style={{ color: 'var(--text3)' }}>Currency</span>
             <span className="font-medium">{business.currency}</span>
           </div>
-          <div className="flex justify-between">
-            <span style={{ color: 'var(--text3)' }}>Timezone</span>
-            <span className="font-medium">Africa/Dar_es_Salaam</span>
-          </div>
-          <div className="flex justify-between">
-            <span style={{ color: 'var(--text3)' }}>Language</span>
-            <span className="font-medium">English</span>
-          </div>
           <div className="flex justify-between items-center">
             <span style={{ color: 'var(--text3)' }}>Brand Color</span>
             <div className="flex items-center gap-2">
@@ -293,10 +259,6 @@ export default function BusinessManagement() {
             </div>
           </div>
           <div className="flex justify-between">
-            <span style={{ color: 'var(--text3)' }}>Owner</span>
-            <span className="font-medium">Calvary</span>
-          </div>
-          <div className="flex justify-between">
             <span style={{ color: 'var(--text3)' }}>Created</span>
             <span className="font-medium">{formatDate(business.created_at)}</span>
           </div>
@@ -306,35 +268,12 @@ export default function BusinessManagement() {
           </div>
         </div>
 
-        {/* Quick Stats */}
-        <div className="mb-6 p-4 rounded-xl" style={{ background: 'rgba(0, 0, 0, 0.2)' }}>
-          <div className="text-xs font-semibold mb-3" style={{ color: 'var(--text3)' }}>QUICK STATS</div>
-          <div className="grid grid-cols-2 gap-3" style={{ fontSize: '0.875rem' }}>
-            <div>
-              <div style={{ color: 'var(--text3)' }}>Products</div>
-              <div className="font-bold">234</div>
-            </div>
-            <div>
-              <div style={{ color: 'var(--text3)' }}>Sales</div>
-              <div className="font-bold">12,442</div>
-            </div>
-            <div>
-              <div style={{ color: 'var(--text3)' }}>Employees</div>
-              <div className="font-bold">8</div>
-            </div>
-            <div>
-              <div style={{ color: 'var(--text3)' }}>Branches</div>
-              <div className="font-bold">3</div>
-            </div>
-          </div>
-        </div>
-
         {/* Actions */}
         <div className="space-y-2">
           <button
-            onClick={() => openEditDrawer(business)}
+            onClick={() => openEditModal(business)}
             className="w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all hover:bg-[var(--accent-light)]"
-            style={{ border: '1px solid #2E3654' }}
+            style={{ border: '1px solid var(--border)' }}
           >
             <Edit size={18} />
             <span className="font-medium">Edit Business</span>
@@ -342,14 +281,18 @@ export default function BusinessManagement() {
           <div className="grid grid-cols-2 gap-2">
             <button
               className="flex items-center justify-center gap-2 px-4 py-3 rounded-xl transition-all hover:bg-[var(--accent-light)]"
-              style={{ border: '1px solid #2E3654', fontSize: '0.875rem' }}
+              style={{ border: '1px solid var(--border)', fontSize: '0.875rem' }}
             >
               <Users size={16} />
               <span>Users</span>
             </button>
             <button
+              onClick={() => {
+                setEditingBusiness(business)
+                setShowSettingsModal(true)
+              }}
               className="flex items-center justify-center gap-2 px-4 py-3 rounded-xl transition-all hover:bg-[var(--accent-light)]"
-              style={{ border: '1px solid #2E3654', fontSize: '0.875rem' }}
+              style={{ border: '1px solid var(--border)', fontSize: '0.875rem' }}
             >
               <Settings size={16} />
               <span>Settings</span>
@@ -358,27 +301,19 @@ export default function BusinessManagement() {
           <div className="grid grid-cols-2 gap-2">
             <button
               onClick={() => {
-                setShowLogoUpload(!showLogoUpload)
-                if (!showLogoUpload) setTimeout(() => fileInputRef.current?.click(), 100)
+                setEditingBusiness(business)
+                setShowLogoUploadModal(true)
               }}
               className="flex items-center justify-center gap-2 px-4 py-3 rounded-xl transition-all hover:bg-[var(--accent-light)]"
-              style={{ border: '1px solid #2E3654', fontSize: '0.875rem' }}
+              style={{ border: '1px solid var(--border)', fontSize: '0.875rem' }}
             >
               <ImageIcon size={16} />
               <span>Upload Logo</span>
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept="image/*"
-                className="hidden"
-                onChange={handleLogoUpload}
-                disabled={isUploading}
-              />
             </button>
             <button
               onClick={() => handleDelete(business.id)}
               className="flex items-center justify-center gap-2 px-4 py-3 rounded-xl transition-all hover:bg-red-500/10"
-              style={{ border: '1px solid #2E3654', fontSize: '0.875rem', color: 'var(--red)' }}
+              style={{ border: '1px solid var(--border)', fontSize: '0.875rem', color: 'var(--red)' }}
             >
               <Trash2 size={16} />
               <span>Delete</span>
@@ -386,32 +321,6 @@ export default function BusinessManagement() {
           </div>
         </div>
 
-        {/* Logo Upload Area */}
-        <AnimatePresence>
-          {showLogoUpload && (
-            <motion.div
-              initial={{ opacity: 0, height: 0 }}
-              animate={{ opacity: 1, height: 'auto' }}
-              exit={{ opacity: 0, height: 0 }}
-              className="mt-4 p-6 rounded-xl border-2 border-dashed"
-              style={{ borderColor: '#2E3654' }}
-              onDragOver={handleDragOver}
-              onDrop={handleDrop}
-            >
-              <div className="text-center">
-                <Upload size={32} className="mx-auto mb-3" style={{ color: 'var(--accent)' }} />
-                <div className="font-medium mb-1">Drag logo here</div>
-                <div className="text-sm" style={{ color: 'var(--text3)' }}>or <span className="underline cursor-pointer" onClick={() => fileInputRef.current?.click()}>Browse Files</span></div>
-                <div className="text-xs mt-2" style={{ color: 'var(--text3)' }}>PNG JPG SVG • Maximum 5 MB</div>
-                {isUploading && (
-                  <div className="mt-3">
-                    <div className="text-sm font-medium" style={{ color: 'var(--accent)' }}>{uploadProgress}%</div>
-                  </div>
-                )}
-              </div>
-            </motion.div>
-          )}
-        </AnimatePresence>
       </motion.div>
     )
   }
@@ -449,7 +358,7 @@ export default function BusinessManagement() {
       )}
 
       {/* Statistics Row */}
-      <div className="stats-grid mb-6">
+      <div className="stats-grid">
         <div className="stat-card">
           <div className="stat-icon" style={{ background: 'var(--accent-light)', color: 'var(--accent)' }}>
             <Building2 />
@@ -457,30 +366,6 @@ export default function BusinessManagement() {
           <div className="stat-label">Businesses</div>
           <div className="stat-value" style={{ color: 'var(--accent)' }}>{businesses.length}</div>
           <div className="stat-sub">Total organizations</div>
-        </div>
-        <div className="stat-card">
-          <div className="stat-icon" style={{ background: 'var(--green-light)', color: 'var(--green)' }}>
-            <Users />
-          </div>
-          <div className="stat-label">Users</div>
-          <div className="stat-value" style={{ color: 'var(--green)' }}>{businesses.length * 8}</div>
-          <div className="stat-sub">Total team members</div>
-        </div>
-        <div className="stat-card">
-          <div className="stat-icon" style={{ background: 'var(--yellow-light)', color: 'var(--yellow)' }}>
-            <BarChart3 />
-          </div>
-          <div className="stat-label">Branches</div>
-          <div className="stat-value" style={{ color: 'var(--yellow)' }}>{businesses.length * 3}</div>
-          <div className="stat-sub">All locations</div>
-        </div>
-        <div className="stat-card">
-          <div className="stat-icon" style={{ background: 'var(--blue-light)', color: 'var(--blue)' }}>
-            <DollarSign />
-          </div>
-          <div className="stat-label">Revenue</div>
-          <div className="stat-value" style={{ color: 'var(--blue)' }}>{fmt(businesses.length * 24000000)} TZS</div>
-          <div className="stat-sub">Total earnings</div>
         </div>
       </div>
 
@@ -594,106 +479,225 @@ export default function BusinessManagement() {
         )}
       </AnimatePresence>
 
-      {/* Edit Drawer */}
+      {/* Edit Modal */}
       <AnimatePresence>
-        {showEditDrawer && editingBusiness && (
-          <>
+        {showEditModal && editingBusiness && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4"
+          >
             <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              onClick={() => setShowEditDrawer(false)}
-              className="fixed inset-0 bg-black/50 z-50"
-            />
-            <motion.div
-              initial={{ x: '100%' }}
-              animate={{ x: 0 }}
-              exit={{ x: '100%' }}
-              transition={{ type: 'spring', damping: 25, stiffness: 200 }}
-              className="fixed right-0 top-0 h-full w-full max-w-md bg-[var(--bg)] z-50 shadow-2xl overflow-y-auto"
+              initial={{ opacity: 0, scale: 0.95, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 20 }}
+              className="card max-w-md w-full"
             >
-              <div className="p-6">
-                <div className="flex justify-between items-center mb-6">
-                  <h3 className="text-xl font-bold">Edit Business</h3>
-                  <button
-                    onClick={() => setShowEditDrawer(false)}
-                    className="p-2 hover:bg-[var(--border)] rounded-lg transition-colors"
-                  >
-                    <X size={20} />
-                  </button>
+              <div className="flex justify-between items-center mb-6">
+                <h3 className="text-xl font-bold">Edit Business</h3>
+                <button
+                  onClick={() => setShowEditModal(false)}
+                  className="p-2 hover:bg-[var(--border)] rounded-lg transition-colors"
+                >
+                  <X size={20} />
+                </button>
+              </div>
+
+              <form onSubmit={handleUpdate} className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium mb-2">Business Name</label>
+                  <input
+                    type="text"
+                    required
+                    value={formData.name}
+                    onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                    className="w-full px-4 py-3 bg-[var(--bg2)] border border-[var(--border)] rounded-xl focus:ring-2 focus:ring-[var(--accent)] focus:border-[var(--accent)]"
+                  />
                 </div>
 
-                <form onSubmit={handleUpdate} className="space-y-4">
-                  <div>
-                    <label className="block text-sm font-medium mb-2">Business Name</label>
-                    <input
-                      type="text"
-                      required
-                      value={formData.name}
-                      onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                      className="w-full px-4 py-3 bg-[var(--bg2)] border border-[var(--border)] rounded-xl focus:ring-2 focus:ring-[var(--accent)] focus:border-[var(--accent)]"
-                    />
-                  </div>
+                <div>
+                  <label className="block text-sm font-medium mb-2">Currency</label>
+                  <select
+                    value={formData.currency}
+                    onChange={(e) => setFormData({ ...formData, currency: e.target.value as any })}
+                    className="w-full px-4 py-3 bg-[var(--bg2)] border border-[var(--border)] rounded-xl focus:ring-2 focus:ring-[var(--accent)] focus:border-[var(--accent)]"
+                  >
+                    <option value="USD">USD ($)</option>
+                    <option value="TZS">TZS (TSh)</option>
+                    <option value="KSH">KSH (KSh)</option>
+                  </select>
+                </div>
 
-                  <div>
-                    <label className="block text-sm font-medium mb-2">Currency</label>
-                    <select
-                      value={formData.currency}
-                      onChange={(e) => setFormData({ ...formData, currency: e.target.value as any })}
-                      className="w-full px-4 py-3 bg-[var(--bg2)] border border-[var(--border)] rounded-xl focus:ring-2 focus:ring-[var(--accent)] focus:border-[var(--accent)]"
-                    >
-                      <option value="USD">USD ($)</option>
-                      <option value="TZS">TZS (TSh)</option>
-                      <option value="KSH">KSH (KSh)</option>
-                    </select>
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium mb-3">Brand Color</label>
-                    <div className="grid grid-cols-4 gap-3 mb-3">
-                      {colorOptions.map((color) => (
-                        <button
-                          key={color}
-                          type="button"
-                          onClick={() => setFormData({ ...formData, themeColor: color })}
-                          className={`w-full aspect-square rounded-xl transition-all ${
-                            formData.themeColor === color ? 'ring-2 ring-offset-2 ring-offset-[var(--bg)] ring-[var(--accent)]' : ''
-                          }`}
-                          style={{ backgroundColor: color }}
-                        />
-                      ))}
-                    </div>
-                    <div className="flex items-center gap-3">
-                      <input
-                        type="color"
-                        value={formData.themeColor}
-                        onChange={(e) => setFormData({ ...formData, themeColor: e.target.value })}
-                        className="w-12 h-12 rounded-xl cursor-pointer"
+                <div>
+                  <label className="block text-sm font-medium mb-3">Brand Color</label>
+                  <div className="grid grid-cols-4 gap-3 mb-3">
+                    {colorOptions.map((color) => (
+                      <button
+                        key={color}
+                        type="button"
+                        onClick={() => setFormData({ ...formData, themeColor: color })}
+                        className={`w-full aspect-square rounded-xl transition-all ${
+                          formData.themeColor === color ? 'ring-2 ring-offset-2 ring-offset-[var(--bg)] ring-[var(--accent)]' : ''
+                        }`}
+                        style={{ backgroundColor: color }}
                       />
-                      <span className="text-sm font-mono">{formData.themeColor}</span>
-                    </div>
+                    ))}
                   </div>
+                  <div className="flex items-center gap-3">
+                    <input
+                      type="color"
+                      value={formData.themeColor}
+                      onChange={(e) => setFormData({ ...formData, themeColor: e.target.value })}
+                      className="w-12 h-12 rounded-xl cursor-pointer"
+                    />
+                    <span className="text-sm font-mono">{formData.themeColor}</span>
+                  </div>
+                </div>
 
-                  <div className="flex gap-3 pt-4">
-                    <button
-                      type="button"
-                      onClick={() => setShowEditDrawer(false)}
-                      className="flex-1 px-4 py-3 border border-[var(--border)] rounded-xl hover:bg-[var(--bg2)] transition-colors"
-                    >
-                      Cancel
-                    </button>
-                    <button
-                      type="submit"
-                      disabled={loading}
-                      className="flex-1 btn btn-primary"
-                    >
-                      {loading ? 'Saving...' : 'Save Changes'}
-                    </button>
+                <div className="flex gap-3 pt-4">
+                  <button
+                    type="button"
+                    onClick={() => setShowEditModal(false)}
+                    className="flex-1 px-4 py-3 border border-[var(--border)] rounded-xl hover:bg-[var(--bg2)] transition-colors"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={loading}
+                    className="flex-1 btn btn-primary"
+                  >
+                    {loading ? 'Saving...' : 'Save Changes'}
+                  </button>
+                </div>
+              </form>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Logo Upload Modal */}
+      <AnimatePresence>
+        {showLogoUploadModal && editingBusiness && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4"
+          >
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 20 }}
+              className="card max-w-md w-full"
+            >
+              <div className="flex justify-between items-center mb-6">
+                <h3 className="text-xl font-bold">Upload Logo</h3>
+                <button
+                  onClick={() => setShowLogoUploadModal(false)}
+                  className="p-2 hover:bg-[var(--border)] rounded-lg transition-colors"
+                >
+                  <X size={20} />
+                </button>
+              </div>
+
+              <div
+                className="p-8 rounded-xl border-2 border-dashed text-center"
+                style={{ borderColor: 'var(--border)' }}
+                onDragOver={(e) => e.preventDefault()}
+                onDrop={async (e) => {
+                  e.preventDefault()
+                  const file = e.dataTransfer.files[0]
+                  if (file && file.type.startsWith('image/')) {
+                    const input = document.createElement('input')
+                    input.type = 'file'
+                    input.accept = 'image/*'
+                    input.files = e.dataTransfer.files
+                    handleLogoUpload({ target: input } as any, editingBusiness)
+                  }
+                }}
+              >
+                <Upload size={48} className="mx-auto mb-4" style={{ color: 'var(--accent)' }} />
+                <div className="font-medium mb-2">Drag logo here</div>
+                <div className="text-sm mb-4" style={{ color: 'var(--text3)' }}>
+                  or <span className="underline cursor-pointer" onClick={() => fileInputRef.current?.click()}>Browse Files</span>
+                </div>
+                <div className="text-xs mb-4" style={{ color: 'var(--text3)' }}>PNG JPG SVG • Maximum 5 MB</div>
+                {isUploading && (
+                  <div className="mt-4">
+                    <div className="text-sm font-medium" style={{ color: 'var(--accent)' }}>{uploadProgress}%</div>
                   </div>
-                </form>
+                )}
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  onChange={(e) => handleLogoUpload(e, editingBusiness)}
+                  disabled={isUploading}
+                />
               </div>
             </motion.div>
-          </>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Settings Modal */}
+      <AnimatePresence>
+        {showSettingsModal && editingBusiness && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4"
+          >
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 20 }}
+              className="card max-w-md w-full"
+            >
+              <div className="flex justify-between items-center mb-6">
+                <h3 className="text-xl font-bold">Business Settings</h3>
+                <button
+                  onClick={() => setShowSettingsModal(false)}
+                  className="p-2 hover:bg-[var(--border)] rounded-lg transition-colors"
+                >
+                  <X size={20} />
+                </button>
+              </div>
+
+              <div className="space-y-4">
+                <div className="p-4 rounded-xl" style={{ background: 'var(--bg2)' }}>
+                  <div className="text-sm font-medium mb-2">Business ID</div>
+                  <div className="text-xs font-mono" style={{ color: 'var(--text3)' }}>{editingBusiness.id}</div>
+                </div>
+
+                <div className="p-4 rounded-xl" style={{ background: 'var(--bg2)' }}>
+                  <div className="text-sm font-medium mb-2">Owner ID</div>
+                  <div className="text-xs font-mono" style={{ color: 'var(--text3)' }}>{editingBusiness.owner_id}</div>
+                </div>
+
+                <div className="p-4 rounded-xl" style={{ background: 'var(--bg2)' }}>
+                  <div className="text-sm font-medium mb-2">Created</div>
+                  <div className="text-sm" style={{ color: 'var(--text2)' }}>{formatDate(editingBusiness.created_at)}</div>
+                </div>
+
+                <div className="p-4 rounded-xl" style={{ background: 'var(--bg2)' }}>
+                  <div className="text-sm font-medium mb-2">Last Updated</div>
+                  <div className="text-sm" style={{ color: 'var(--text2)' }}>{formatDate(editingBusiness.updated_at)}</div>
+                </div>
+
+                <button
+                  onClick={() => setShowSettingsModal(false)}
+                  className="w-full px-4 py-3 border border-[var(--border)] rounded-xl hover:bg-[var(--bg2)] transition-colors"
+                >
+                  Close
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
         )}
       </AnimatePresence>
     </div>
