@@ -1,0 +1,11 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(node -e ' *)",
+      "Bash(node \"C:\\\\Users\\\\USER\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\d--myShopCare-1\\\\aa326208-00b7-46e6-b3c9-ddf09d09c6b6\\\\scratchpad\\\\difftrans.js\")",
+      "Bash(git check-ignore *)",
+      "Bash(git rm *)",
+      "Bash(echo \"EXIT_CODE=$?\")"
+    ]
+  }
+}
