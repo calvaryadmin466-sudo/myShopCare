@@ -9,6 +9,8 @@ import * as XLSX from 'xlsx'
 
 type SaleWithItems = Sale & { sale_items?: SaleItem[] }
 type DateFilter = 'today' | 'week' | 'month' | 'all'
+type PaymentMethodFilter = 'all' | 'cash' | 'mobile_money' | 'card' | 'credit'
+type PaymentStatusFilter = 'all' | 'paid' | 'partial' | 'pending'
 
 function fmt(n: number) {
   return new Intl.NumberFormat().format(Math.round(n))
@@ -76,10 +78,24 @@ export default function SalesHistory() {
   const [sales, setSales] = useState<SaleWithItems[]>([])
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
+  const [invoiceSearch, setInvoiceSearch] = useState('')
   const [dateFilter, setDateFilter] = useState<DateFilter>((searchParams.get('filter') as DateFilter) || 'today')
+  const [paymentMethodFilter, setPaymentMethodFilter] = useState<PaymentMethodFilter>('all')
+  const [paymentStatusFilter, setPaymentStatusFilter] = useState<PaymentStatusFilter>('all')
   const [selected, setSelected] = useState<SaleWithItems | null>(null)
+  const [currentPage, setCurrentPage] = useState(1)
+  const [totalCount, setTotalCount] = useState(0)
+  const pageSize = 25
 
-  useEffect(() => { if (profile) load() }, [profile, dateFilter])
+  useEffect(() => { if (profile) load() }, [profile, dateFilter, paymentMethodFilter, paymentStatusFilter, currentPage])
+
+  useEffect(() => {
+    if (invoiceSearch) {
+      searchByInvoice(invoiceSearch)
+    } else {
+      load()
+    }
+  }, [invoiceSearch])
 
   function filterStartDate() {
     if (dateFilter === 'all') return null
@@ -103,32 +119,66 @@ export default function SalesHistory() {
     if (!profile) return
     setLoading(true)
 
+    const from = (currentPage - 1) * pageSize
+    const to = from + pageSize - 1
+
     let query = supabase
       .from('sales')
-      .select('*, sale_items(*)')
+      .select('*, sale_items(*)', { count: 'exact' })
       .eq('business_id', profile.business_id || profile.shop_id)
       .order('created_at', { ascending: false })
-      .limit(200)
+      .range(from, to)
 
     const fromDate = filterStartDate()
     if (fromDate) query = query.gte('created_at', fromDate)
 
-    const { data, error } = await query
+    if (paymentMethodFilter !== 'all') query = query.eq('payment_method', paymentMethodFilter)
+    if (paymentStatusFilter !== 'all') query = query.eq('payment_status', paymentStatusFilter)
+
+    const { data, error, count } = await query
     if (error) {
       console.error('Error loading sales history:', error)
       setSales([])
+      setTotalCount(0)
     } else {
       setSales((data as SaleWithItems[] || []).map(s => ({ ...s, items: s.sale_items || [] })))
+      setTotalCount(count || 0)
+    }
+    setLoading(false)
+  }
+
+  async function searchByInvoice(invoiceId: string) {
+    if (!profile || !invoiceId.trim()) return
+    setLoading(true)
+
+    const { data, error } = await supabase
+      .from('sales')
+      .select('*, sale_items(*)')
+      .eq('business_id', profile.business_id || profile.shop_id)
+      .or(`id.eq.${invoiceId},id.ilike.${invoiceId}%`)
+      .limit(1)
+
+    if (error) {
+      console.error('Error searching invoice:', error)
+      setSales([])
+    } else if (data && data.length > 0) {
+      setSales((data as SaleWithItems[] || []).map(s => ({ ...s, items: s.sale_items || [] })))
+      setTotalCount(1)
+    } else {
+      setSales([])
+      setTotalCount(0)
     }
     setLoading(false)
   }
 
   const filtered = sales.filter(s => {
+    if (invoiceSearch) return true // Already filtered by invoice search
     const term = search.toLowerCase()
     const customer = s.customer_name?.toLowerCase() || ''
     const phone = s.customer_phone?.toLowerCase() || ''
     const items = (s.items || []).map(i => i.product_name.toLowerCase()).join(' ')
-    return customer.includes(term) || phone.includes(term) || items.includes(term)
+    const invoiceId = s.id.toLowerCase()
+    return customer.includes(term) || phone.includes(term) || items.includes(term) || invoiceId.includes(term)
   })
 
   const totalRevenue = filtered.reduce((sum, s) => sum + Number(s.total), 0)
@@ -138,6 +188,9 @@ export default function SalesHistory() {
   const totalGrossProfit = totalRevenue - totalCOGS
 
   const dateFilters: DateFilter[] = ['today', 'week', 'month', 'all']
+  const paymentMethods: PaymentMethodFilter[] = ['all', 'cash', 'mobile_money', 'card', 'credit']
+  const paymentStatuses: PaymentStatusFilter[] = ['all', 'paid', 'partial', 'pending']
+  const totalPages = Math.ceil(totalCount / pageSize)
 
   function exportSaleExcel(sale: SaleWithItems) {
     const workbook = XLSX.utils.book_new()
@@ -226,16 +279,46 @@ export default function SalesHistory() {
         </div>
       </div>
 
-      <div className="filters" style={{ marginBottom: 16 }}>
-        <div className="search-bar" style={{ flex: 1, maxWidth: 360 }}>
+      <div className="filters" style={{ marginBottom: 16, flexWrap: 'wrap' }}>
+        <div className="search-bar" style={{ flex: 1, maxWidth: 360, minWidth: 200 }}>
           <Search />
-          <input value={search} onChange={e => setSearch(e.target.value)} placeholder={t('search_sales')} />
+          <input 
+            value={search} 
+            onChange={e => { setSearch(e.target.value); setInvoiceSearch(''); setCurrentPage(1); }} 
+            placeholder={t('search_sales')} 
+          />
+        </div>
+        <div className="search-bar" style={{ flex: 1, maxWidth: 300, minWidth: 150 }}>
+          <FileText />
+          <input 
+            value={invoiceSearch} 
+            onChange={e => { setInvoiceSearch(e.target.value); setSearch(''); setCurrentPage(1); }} 
+            placeholder="Invoice ID..." 
+          />
         </div>
         {dateFilters.map(f => (
-          <button key={f} className={`filter-chip ${dateFilter === f ? 'active' : ''}`} onClick={() => setDateFilter(f)}>
+          <button key={f} className={`filter-chip ${dateFilter === f ? 'active' : ''}`} onClick={() => { setDateFilter(f); setCurrentPage(1); }}>
             {t(`filter_${f}`)}
           </button>
         ))}
+        <select 
+          value={paymentMethodFilter} 
+          onChange={e => { setPaymentMethodFilter(e.target.value as PaymentMethodFilter); setCurrentPage(1); }}
+          style={{ padding: '8px 12px', borderRadius: 8, border: '1px solid var(--border)', background: 'var(--bg2)', color: 'var(--text)' }}
+        >
+          {paymentMethods.map(pm => (
+            <option key={pm} value={pm}>{pm === 'all' ? 'All Payment Methods' : t(pm)}</option>
+          ))}
+        </select>
+        <select 
+          value={paymentStatusFilter} 
+          onChange={e => { setPaymentStatusFilter(e.target.value as PaymentStatusFilter); setCurrentPage(1); }}
+          style={{ padding: '8px 12px', borderRadius: 8, border: '1px solid var(--border)', background: 'var(--bg2)', color: 'var(--text)' }}
+        >
+          {paymentStatuses.map(ps => (
+            <option key={ps} value={ps}>{ps === 'all' ? 'All Statuses' : t(ps)}</option>
+          ))}
+        </select>
       </div>
 
       {loading ? <TableSkeleton /> : (
@@ -289,6 +372,29 @@ export default function SalesHistory() {
               </tbody>
             </table>
           </div>
+        </div>
+      )}
+
+      {/* Pagination */}
+      {totalPages > 1 && (
+        <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: 16, marginTop: 16 }}>
+          <button 
+            className="btn btn-ghost" 
+            onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+            disabled={currentPage === 1}
+          >
+            Previous
+          </button>
+          <span style={{ color: 'var(--text2)' }}>
+            Page {currentPage} of {totalPages} ({totalCount} total)
+          </span>
+          <button 
+            className="btn btn-ghost" 
+            onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+            disabled={currentPage === totalPages}
+          >
+            Next
+          </button>
         </div>
       )}
 
