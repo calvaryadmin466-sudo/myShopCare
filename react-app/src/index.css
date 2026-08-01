@@ -923,3 +923,59 @@ tbody tr:last-child { border-bottom: none; }
     display: inline;
   }
 }
+
+/* ─── Business Management page ──────────────────────────────── */
+.biz-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 20px; }
+
+.biz-card { transition: transform 0.2s ease, box-shadow 0.2s ease; }
+.biz-card:hover { transform: translateY(-3px); box-shadow: 0 8px 28px rgba(17,24,39,0.12); }
+
+.biz-card-top { display: flex; align-items: center; gap: 14px; margin-bottom: 18px; }
+
+.biz-logo {
+  width: 60px; height: 60px;
+  border-radius: var(--radius-lg);
+  flex-shrink: 0;
+  display: flex; align-items: center; justify-content: center;
+  overflow: hidden;
+}
+.biz-logo img { width: 100%; height: 100%; object-fit: cover; }
+
+.biz-card-title { font-family: var(--font-display); font-size: 1.05rem; font-weight: 700; margin-bottom: 6px; }
+
+.biz-details { margin-bottom: 18px; }
+
+.biz-actions { display: flex; flex-direction: column; gap: 8px; }
+.biz-actions-row { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.biz-actions .btn { width: 100%; justify-content: center; }
+
+.color-swatches { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-bottom: 12px; }
+.color-swatch {
+  aspect-ratio: 1;
+  border-radius: var(--radius);
+  cursor: pointer;
+  border: 2px solid transparent;
+  transition: transform 0.1s, box-shadow 0.15s;
+  padding: 0;
+}
+.color-swatch:hover { transform: scale(1.06); }
+.color-swatch.active { box-shadow: 0 0 0 2px var(--bg2), 0 0 0 4px var(--accent); }
+
+.upload-dropzone {
+  border: 2px dashed var(--border);
+  border-radius: var(--radius-lg);
+  padding: 32px 24px;
+  text-align: center;
+  transition: border-color 0.15s, background 0.15s;
+}
+.upload-dropzone.dragging { border-color: var(--accent); background: var(--accent-light); }
+.upload-dropzone .browse-link { color: var(--accent); cursor: pointer; font-weight: 600; text-decoration: underline; }
+
+.progress-track { width: 100%; height: 6px; border-radius: 99px; background: var(--bg3); overflow: hidden; margin-top: 12px; }
+.progress-fill { height: 100%; background: var(--accent); transition: width 0.15s ease; }
+
+.info-row { padding: 12px 14px; border-radius: var(--radius); background: var(--bg3); margin-bottom: 10px; }
+.info-row-label { font-size: 0.72rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; color: var(--text3); margin-bottom: 4px; }
+.info-row-value { font-size: 0.85rem; color: var(--text); word-break: break-all; }
+.info-row-value.mono { font-family: monospace; font-size: 0.78rem; }
+.info-row-copy { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
