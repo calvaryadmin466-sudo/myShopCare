@@ -54,7 +54,40 @@ export default function Debts() {
   const [payForm, setPayForm] = useState({ amount: 0, payment_method: 'cash', notes: '' })
   const [saving, setSaving] = useState(false)
 
-  useEffect(() => { if (profile) load() }, [profile])
+  useEffect(() => { 
+    if (profile) {
+      load()
+      
+      // Set up real-time subscription for debt payments
+      const businessId = profile.business_id || profile.shop_id
+      if (businessId) {
+        const subscription = supabase
+          .channel('debts-payments-updates')
+          .on('postgres_changes', {
+            event: 'INSERT',
+            schema: 'public',
+            table: 'debt_payments'
+          }, (payload) => {
+            console.log('Debts: New payment recorded', payload)
+            load() // Reload debts when payments are recorded
+          })
+          .on('postgres_changes', {
+            event: 'UPDATE',
+            schema: 'public',
+            table: 'debts',
+            filter: `business_id=eq.${businessId}`
+          }, (payload) => {
+            console.log('Debts: Debt updated', payload)
+            load() // Reload debts when debt status changes
+          })
+          .subscribe()
+        
+        return () => {
+          subscription.unsubscribe()
+        }
+      }
+    }
+  }, [profile])
 
   async function load() {
     const { data } = await supabase.from('debts').select('*').eq('business_id', profile!.business_id || profile!.shop_id).order('created_at', { ascending: false })

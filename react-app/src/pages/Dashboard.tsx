@@ -51,6 +51,28 @@ export default function Dashboard() {
     if (profile?.id) {
       console.log('Dashboard: Calling loadStats')
       loadStats()
+      
+      // Set up real-time subscription for sales
+      const businessId = profile.business_id || profile.shop_id
+      if (businessId) {
+        const subscription = supabase
+          .channel('dashboard-sales-updates')
+          .on('postgres_changes', {
+            event: 'INSERT',
+            schema: 'public',
+            table: 'sales',
+            filter: `business_id=eq.${businessId}`
+          }, () => {
+            console.log('Dashboard: New sale detected, refreshing stats')
+            loadStats()
+          })
+          .subscribe()
+        
+        return () => {
+          abortControllerRef.current?.abort()
+          subscription.unsubscribe()
+        }
+      }
     } else {
       console.log('Dashboard: No profile.id, skipping loadStats')
       // If profile exists but has no id, or profile is null after auth loading completes

@@ -61,7 +61,32 @@ export default function Products() {
   const [uploading, setUploading] = useState(false)
   const [error, setError] = useState('')
 
-  useEffect(() => { if (profile) load() }, [profile])
+  useEffect(() => { 
+    if (profile) {
+      load()
+      
+      // Set up real-time subscription for product inventory changes
+      const businessId = profile.business_id || profile.shop_id
+      if (businessId) {
+        const subscription = supabase
+          .channel('products-inventory-updates')
+          .on('postgres_changes', {
+            event: 'UPDATE',
+            schema: 'public',
+            table: 'products',
+            filter: `business_id=eq.${businessId}`
+          }, (payload) => {
+            console.log('Products: Product updated', payload)
+            load() // Reload products when inventory changes
+          })
+          .subscribe()
+        
+        return () => {
+          subscription.unsubscribe()
+        }
+      }
+    }
+  }, [profile])
 
   async function load() {
     const { data } = await supabase.from('products').select('*').eq('business_id', profile!.business_id || profile!.shop_id).order('name')
