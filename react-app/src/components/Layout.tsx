@@ -52,19 +52,23 @@ export default function Layout() {
     return () => document.removeEventListener('mousedown', handleClick)
   }, [])
 
-  // Monitor online status
+  // Monitor online status, and keep retrying any offline-queued operations
+  // (e.g. sales made while offline) as a fallback alongside the 'online'
+  // event listener already inside offlineSync itself.
   useEffect(() => {
     setIsOnline(offlineSync.getOnlineStatus())
-    
+    offlineSync.startPeriodicSync()
+
     const handleOnline = () => setIsOnline(true)
     const handleOffline = () => setIsOnline(false)
-    
+
     window.addEventListener('online', handleOnline)
     window.addEventListener('offline', handleOffline)
-    
+
     return () => {
       window.removeEventListener('online', handleOnline)
       window.removeEventListener('offline', handleOffline)
+      offlineSync.stopPeriodicSync()
     }
   }, [])
 

@@ -7,7 +7,7 @@ import type { Expense, Sale, SaleItem } from '../types'
 import { BarChart3, Download, Printer, RefreshCw, FileText } from 'lucide-react'
 import * as XLSX from 'xlsx'
 
-type Period = 'week' | 'month' | 'year'
+type Period = 'week' | 'month' | 'year' | 'custom' | 'all'
 type View = 'product' | 'category' | 'order'
 type PaymentMethodFilter = 'all' | 'cash' | 'mobile_money' | 'card' | 'bank' | 'other'
 
@@ -49,7 +49,22 @@ function startOfWeek(d: Date) {
   return x
 }
 
-function rangeForPeriod(period: Period, weekStart: string, month: string, year: string) {
+function rangeForPeriod(period: Period, weekStart: string, month: string, year: string, customFrom: string, customTo: string) {
+  if (period === 'custom') {
+    const start = new Date(`${customFrom}T00:00:00`)
+    const end = new Date(`${customTo}T00:00:00`)
+    end.setDate(end.getDate() + 1)
+    return { start, end }
+  }
+  if (period === 'all') {
+    // "All time" — a floor early enough to include any realistic shop data,
+    // through the end of today.
+    const start = new Date(2000, 0, 1, 0, 0, 0, 0)
+    const end = new Date()
+    end.setDate(end.getDate() + 1)
+    end.setHours(0, 0, 0, 0)
+    return { start, end }
+  }
   if (period === 'week') {
     const start = new Date(`${weekStart}T00:00:00`)
     const end = new Date(start)
@@ -88,33 +103,50 @@ export default function Reports() {
   const { t } = useLang()
   const navigate = useNavigate()
   const [searchParams] = useSearchParams()
-  const [period, setPeriod] = useState<Period>(searchParams.get('period') as Period || 'week')
+
+  const now = new Date()
+  const defaultWeekStart = toDateInput(startOfWeek(now))
+  const defaultMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
+  const defaultYear = String(now.getFullYear())
+  const today = toDateInput(now)
+
+  // An exact range (from/to, or range=all) arrives via query params when
+  // navigating here from Sales History, so the two pages agree on exactly
+  // which sales are being shown instead of a same-named-but-different-meaning
+  // preset (this page's "month" is a calendar month; Sales History's "month"
+  // preset is a rolling last-30-days window).
+  const initialFrom = searchParams.get('from')
+  const initialTo = searchParams.get('to')
+  const initialPeriod: Period = searchParams.get('range') === 'all'
+    ? 'all'
+    : initialFrom
+      ? 'custom'
+      : 'week'
+
+  const [period, setPeriod] = useState<Period>(initialPeriod)
   const [view, setView] = useState<View>('product')
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethodFilter>('all')
   const [loading, setLoading] = useState(false)
   const [rows, setRows] = useState<PaymentRow[]>([])
   const [expenses, setExpenses] = useState<Expense[]>([])
 
-  const now = new Date()
-  const defaultWeekStart = toDateInput(startOfWeek(now))
-  const defaultMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
-  const defaultYear = String(now.getFullYear())
-
   const [weekStart, setWeekStart] = useState(defaultWeekStart)
   const [month, setMonth] = useState(defaultMonth)
   const [year, setYear] = useState(defaultYear)
+  const [customFrom, setCustomFrom] = useState(initialFrom || today)
+  const [customTo, setCustomTo] = useState(initialTo || initialFrom || today)
 
-  const { start, end } = useMemo(() => rangeForPeriod(period, weekStart, month, year), [period, weekStart, month, year])
+  const { start, end } = useMemo(() => rangeForPeriod(period, weekStart, month, year, customFrom, customTo), [period, weekStart, month, year, customFrom, customTo])
 
-  useEffect(() => { if (profile) load() }, [profile, period, weekStart, month, year, paymentMethod])
+  useEffect(() => { if (profile) load() }, [profile, period, weekStart, month, year, customFrom, customTo, paymentMethod])
 
+  // Sends the exact date range currently shown here to Sales History, instead
+  // of a same-named preset that means something different over there.
   function goToSalesHistory() {
-    const dateFilterMap: Record<Period, string> = {
-      week: 'week',
-      month: 'month',
-      year: 'all'
-    }
-    navigate(`/sales-history?filter=${dateFilterMap[period]}`)
+    if (period === 'all') { navigate('/sales-history?range=all'); return }
+    const toDate = new Date(end)
+    toDate.setDate(toDate.getDate() - 1)
+    navigate(`/sales-history?from=${toDateInput(start)}&to=${toDateInput(toDate)}`)
   }
 
   async function load() {
@@ -434,6 +466,12 @@ export default function Reports() {
             <option value="week">{t('week')}</option>
             <option value="month">{t('month')}</option>
             <option value="year">{t('year')}</option>
+            <option value="all">{t('all')}</option>
+            {period === 'custom' && (
+              <option value="custom" disabled hidden>
+                {new Date(`${customFrom}T00:00:00`).toLocaleDateString()} – {new Date(`${customTo}T00:00:00`).toLocaleDateString()}
+              </option>
+            )}
           </select>
 
           {period === 'week' && (
@@ -444,6 +482,11 @@ export default function Reports() {
           )}
           {period === 'year' && (
             <input type="number" min="2000" value={year} onChange={e => setYear(e.target.value)} style={{ width: 110 }} />
+          )}
+          {period === 'custom' && (
+            <span className="filter-chip active" title="Exact range carried over from Sales History">
+              {new Date(`${customFrom}T00:00:00`).toLocaleDateString()} – {new Date(`${customTo}T00:00:00`).toLocaleDateString()}
+            </span>
           )}
 
           <select value={paymentMethod} onChange={e => setPaymentMethod(e.target.value as PaymentMethodFilter)}>

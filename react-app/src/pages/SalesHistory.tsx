@@ -9,9 +9,16 @@ import { BarChart3, Calendar, Download, Eye, FileText, Printer, Search, X } from
 import * as XLSX from 'xlsx'
 
 type SaleWithItems = Sale & { sale_items?: SaleItem[] }
-type DateFilter = 'today' | 'week' | 'month' | 'all'
+type DateFilter = 'today' | 'week' | 'month' | 'all' | 'custom'
 type PaymentMethodFilter = 'all' | 'cash' | 'mobile_money' | 'card' | 'credit'
 type PaymentStatusFilter = 'all' | 'paid' | 'partial' | 'pending'
+
+function toDateInput(d: Date) {
+  const yyyy = d.getFullYear()
+  const mm = String(d.getMonth() + 1).padStart(2, '0')
+  const dd = String(d.getDate()).padStart(2, '0')
+  return `${yyyy}-${mm}-${dd}`
+}
 
 function fmt(n: number) {
   return new Intl.NumberFormat().format(Math.round(n))
@@ -82,7 +89,21 @@ export default function SalesHistory() {
   const [search, setSearch] = useState('')
   const [debouncedSearch, setDebouncedSearch] = useState('')
   const [invoiceSearch, setInvoiceSearch] = useState('')
-  const [dateFilter, setDateFilter] = useState<DateFilter>((searchParams.get('filter') as DateFilter) || 'today')
+  // A custom range (exact from/to dates) arrives via query params when
+  // navigating here from Reports, so the two pages agree on exactly which
+  // sales are being shown instead of a same-named-but-different-meaning
+  // preset (Reports' "month" is a calendar month; this page's own "month"
+  // preset is a rolling last-30-days window).
+  const initialFrom = searchParams.get('from')
+  const initialTo = searchParams.get('to')
+  const initialFilter: DateFilter = searchParams.get('range') === 'all'
+    ? 'all'
+    : initialFrom
+      ? 'custom'
+      : (searchParams.get('filter') as DateFilter) || 'today'
+  const [dateFilter, setDateFilter] = useState<DateFilter>(initialFilter)
+  const [customFrom, setCustomFrom] = useState(initialFrom || toDateInput(startOfToday()))
+  const [customTo, setCustomTo] = useState(initialTo || initialFrom || toDateInput(startOfToday()))
   const [paymentMethodFilter, setPaymentMethodFilter] = useState<PaymentMethodFilter>('all')
   const [paymentStatusFilter, setPaymentStatusFilter] = useState<PaymentStatusFilter>('all')
   const [selected, setSelected] = useState<SaleWithItems | null>(null)
@@ -111,24 +132,39 @@ export default function SalesHistory() {
       load()
       loadStats()
     }
-  }, [profile, currentBusiness, invoiceSearch, dateFilter, paymentMethodFilter, paymentStatusFilter, currentPage, debouncedSearch])
+  }, [profile, currentBusiness, invoiceSearch, dateFilter, paymentMethodFilter, paymentStatusFilter, currentPage, debouncedSearch, customFrom, customTo])
 
   function filterStartDate() {
     if (dateFilter === 'all') return null
+    if (dateFilter === 'custom') return new Date(`${customFrom}T00:00:00`).toISOString()
     const d = startOfToday()
     if (dateFilter === 'week') d.setDate(d.getDate() - 6)
     if (dateFilter === 'month') d.setDate(d.getDate() - 29)
     return d.toISOString()
   }
 
+  // Only the custom range (arriving from Reports) has an upper bound — the
+  // rolling today/week/month presets are always "since X ago through now",
+  // where "now" already IS the true upper bound, so no .lt() is needed there.
+  function filterEndDate() {
+    if (dateFilter !== 'custom') return null
+    const d = new Date(`${customTo}T00:00:00`)
+    d.setDate(d.getDate() + 1)
+    return d.toISOString()
+  }
+
+  // Sends the exact date range currently shown here to Reports, instead of a
+  // same-named preset that means something different over there (Reports'
+  // "month" is a calendar month; this page's "month" is a rolling last-30-days
+  // window) — so the two pages show the same underlying data after navigating.
   function goToReports() {
-    const periodMap: Record<DateFilter, string> = {
-      today: 'week',
-      week: 'week',
-      month: 'month',
-      all: 'year'
-    }
-    navigate(`/reports?period=${periodMap[dateFilter]}`)
+    if (dateFilter === 'all') { navigate('/reports?range=all'); return }
+    if (dateFilter === 'custom') { navigate(`/reports?from=${customFrom}&to=${customTo}`); return }
+    const today = toDateInput(startOfToday())
+    const daysBack = dateFilter === 'week' ? 6 : dateFilter === 'month' ? 29 : 0
+    const fromDate = startOfToday()
+    fromDate.setDate(fromDate.getDate() - daysBack)
+    navigate(`/reports?from=${toDateInput(fromDate)}&to=${today}`)
   }
 
   // Resolves the free-text search term to a set of sale ids that match by
@@ -151,8 +187,9 @@ export default function SalesHistory() {
   // identically, so the two queries always agree on what "matches".
   async function resolveFilters(businessId: string, term: string) {
     const fromDate = filterStartDate()
+    const endDate = filterEndDate()
     const itemIds = term ? await matchingSaleIdsByItemName(term, businessId) : []
-    return { fromDate, itemIds }
+    return { fromDate, endDate, itemIds }
   }
 
   async function load() {
@@ -163,7 +200,7 @@ export default function SalesHistory() {
     const to = from + pageSize - 1
     const businessId = currentBusiness.id
     const term = debouncedSearch.trim()
-    const { fromDate, itemIds } = await resolveFilters(businessId, term)
+    const { fromDate, endDate, itemIds } = await resolveFilters(businessId, term)
 
     let query = supabase
       .from('sales')
@@ -172,6 +209,7 @@ export default function SalesHistory() {
       .order('created_at', { ascending: false })
 
     if (fromDate) query = query.gte('created_at', fromDate)
+    if (endDate) query = query.lt('created_at', endDate)
     if (paymentMethodFilter !== 'all') query = query.eq('payment_method', paymentMethodFilter)
     if (paymentStatusFilter !== 'all') query = query.eq('payment_status', paymentStatusFilter)
     if (term) {
@@ -200,7 +238,7 @@ export default function SalesHistory() {
     if (!currentBusiness) return
     const businessId = currentBusiness.id
     const term = debouncedSearch.trim()
-    const { fromDate, itemIds } = await resolveFilters(businessId, term)
+    const { fromDate, endDate, itemIds } = await resolveFilters(businessId, term)
 
     let query = supabase
       .from('sales')
@@ -209,6 +247,7 @@ export default function SalesHistory() {
       .limit(5000)
 
     if (fromDate) query = query.gte('created_at', fromDate)
+    if (endDate) query = query.lt('created_at', endDate)
     if (paymentMethodFilter !== 'all') query = query.eq('payment_method', paymentMethodFilter)
     if (paymentStatusFilter !== 'all') query = query.eq('payment_status', paymentStatusFilter)
     if (term) {
@@ -373,6 +412,12 @@ export default function SalesHistory() {
             {t(`filter_${f}`)}
           </button>
         ))}
+        {dateFilter === 'custom' && (
+          <span className="filter-chip active" title="Exact range carried over from Reports">
+            <Calendar size={12} style={{ marginRight: 4 }} />
+            {new Date(`${customFrom}T00:00:00`).toLocaleDateString()} – {new Date(`${customTo}T00:00:00`).toLocaleDateString()}
+          </span>
+        )}
         <select 
           value={paymentMethodFilter} 
           onChange={e => { setPaymentMethodFilter(e.target.value as PaymentMethodFilter); setCurrentPage(1); }}

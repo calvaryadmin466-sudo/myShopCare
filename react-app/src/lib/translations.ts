@@ -173,6 +173,7 @@ export const translations: Record<'en' | 'sw', Translations> = {
     payment_exceeds_balance: 'Payment cannot exceed the remaining balance.',
     deal_end_before_start: 'End date must be after start date.',
     deal_discount_invalid: 'Enter a valid discount value.',
+    offline_sale_pending: 'Recorded offline — will sync automatically once back online.',
 
     // Reports / P&L
     profit_loss: 'Profit & Loss',
@@ -388,6 +389,7 @@ export const translations: Record<'en' | 'sw', Translations> = {
     payment_exceeds_balance: 'Malipo hayawezi kuzidi salio lililobaki.',
     deal_end_before_start: 'Tarehe ya mwisho lazima iwe baada ya tarehe ya kuanza.',
     deal_discount_invalid: 'Weka kiwango sahihi cha punguzo.',
+    offline_sale_pending: 'Imerekodiwa nje ya mtandao — itasawazishwa kiotomatiki ukirudi mtandaoni.',
 
     // Reports / P&L
     profit_loss: 'Faida na Hasara',

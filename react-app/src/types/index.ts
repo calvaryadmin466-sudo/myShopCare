@@ -290,7 +290,7 @@ export interface OfflineSyncItem {
   business_id: string;
   user_id: string;
   table_name: string;
-  operation: 'insert' | 'update' | 'delete';
+  operation: 'insert' | 'update' | 'delete' | 'rpc';
   record_id?: string;
   record_data: any;
   created_at: string;

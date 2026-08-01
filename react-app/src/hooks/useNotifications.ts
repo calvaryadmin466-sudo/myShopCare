@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { supabase } from '../lib/supabase'
-import { useAuth } from '../contexts/AuthContext'
+import { useBusiness } from '../contexts/BusinessContext'
 import { systemNotifications } from '../lib/systemNotifications'
 import type { Product } from '../types'
 
@@ -18,7 +18,7 @@ export interface AppNotification {
 }
 
 export function useNotifications() {
-  const { profile } = useAuth()
+  const { currentBusiness } = useBusiness()
   const [notifications, setNotifications] = useState<AppNotification[]>([])
   const [loading, setLoading] = useState(true)
   const [permissionRequested, setPermissionRequested] = useState(false)
@@ -28,7 +28,7 @@ export function useNotifications() {
   const notificationsRef = useRef<AppNotification[]>([])
 
   const loadNotifications = useCallback(async () => {
-    const businessId = profile?.business_id || profile?.shop_id
+    const businessId = currentBusiness?.id
     if (!businessId) return
     setLoading(true)
 
@@ -103,10 +103,10 @@ export function useNotifications() {
     notificationsRef.current = list
     setNotifications(list)
     setLoading(false)
-  }, [profile?.business_id, profile?.shop_id])
+  }, [currentBusiness?.id])
 
   useEffect(() => {
-    const businessId = profile?.business_id || profile?.shop_id
+    const businessId = currentBusiness?.id
     if (!businessId) {
       setNotifications([])
       setLoading(false)
@@ -136,7 +136,7 @@ export function useNotifications() {
       window.clearInterval(refreshTimer)
       supabase.removeChannel(channel)
     }
-  }, [profile?.business_id, profile?.shop_id, loadNotifications, permissionRequested])
+  }, [currentBusiness?.id, loadNotifications, permissionRequested])
 
   return { notifications, loading, refetch: loadNotifications, requestPermission: () => systemNotifications.requestPermission() }
 }

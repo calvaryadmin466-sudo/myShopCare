@@ -30,12 +30,13 @@ class OfflineSync {
     return this.isOnline
   }
 
-  // Queue an operation for offline sync
+  // Queue an operation for offline sync. For operation 'rpc', tableName is
+  // used to carry the RPC function name and recordData its arguments.
   async queueOperation(
     businessId: string,
     userId: string,
     tableName: string,
-    operation: 'insert' | 'update' | 'delete',
+    operation: 'insert' | 'update' | 'delete' | 'rpc',
     recordData: any,
     recordId?: string
   ): Promise<void> {
@@ -145,6 +146,12 @@ class OfflineSync {
           await supabase.from(table_name).delete().eq('id', record_id)
         }
         break
+      case 'rpc': {
+        // table_name carries the RPC function name, record_data its arguments.
+        const { error } = await supabase.rpc(table_name, record_data)
+        if (error) throw error
+        break
+      }
     }
   }
 
@@ -159,23 +166,28 @@ class OfflineSync {
         .eq('business_id', businessId)
 
       if (error) throw error
+      await this.cacheRecords(tableName, businessId, data || [])
+    } catch (error) {
+      console.error(`Error caching ${tableName}:`, error)
+    }
+  }
 
-      // Clear existing cachefor this business
+  // Cache already-fetched records directly, without an extra round trip —
+  // for pages that already loaded the data for their own use and just want
+  // to keep the offline cache warm alongside it.
+  async cacheRecords(tableName: string, businessId: string, records: any[]): Promise<void> {
+    try {
       await indexedDB.clearStore(tableName as any, businessId)
-
-      // Cache new data
-      if (data) {
-        await Promise.all(
-          data.map(record =>
-            indexedDB.put(tableName as any, {
-              id: record.id,
-              business_id: businessId,
-              data: record,
-              timestamp: Date.now()
-            })
-          )
+      await Promise.all(
+        records.map(record =>
+          indexedDB.put(tableName as any, {
+            id: record.id,
+            business_id: businessId,
+            data: record,
+            timestamp: Date.now()
+          })
         )
-      }
+      )
     } catch (error) {
       console.error(`Error caching ${tableName}:`, error)
     }

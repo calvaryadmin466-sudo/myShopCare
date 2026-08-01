@@ -4,8 +4,9 @@ import { useAuth } from '../contexts/AuthContext'
 import { useLang } from '../contexts/LangContext'
 import { useBusiness } from '../contexts/BusinessContext'
 import { systemNotifications } from '../lib/systemNotifications'
+import { offlineSync } from '../lib/offlineSync'
 import type { Product, CartItem, Sale, Worker, Deal } from '../types'
-import { Search, Trash2, X, Printer, ShoppingCart as CartIcon, Package } from 'lucide-react'
+import { Search, Trash2, X, Printer, ShoppingCart as CartIcon, Package, WifiOff } from 'lucide-react'
 
 function fmt(n: number) { return new Intl.NumberFormat().format(Math.round(n)) }
 
@@ -45,6 +46,7 @@ export default function POS() {
   const [loading, setLoading] = useState(true)
   const [processing, setProcessing] = useState(false)
   const [receipt, setReceipt] = useState<Sale | null>(null)
+  const [receiptOffline, setReceiptOffline] = useState(false)
   const [sellerId, setSellerId] = useState('profile')
 
   const [customer, setCustomer] = useState({ name: '', phone: '' })
@@ -56,6 +58,17 @@ export default function POS() {
     if (!currentBusiness) return
     const businessId = currentBusiness.id
     const today = todayStr()
+
+    // Offline: fall back to the last cache of products synced while online,
+    // so the cashier can still see stock and keep selling. Workers/deals
+    // aren't essential to checkout and are simply left as last-known.
+    if (!offlineSync.getOnlineStatus()) {
+      const cached = await offlineSync.getData('products', businessId)
+      setProducts((cached as Product[]).filter(p => p.stock_quantity > 0).sort((a, b) => a.name.localeCompare(b.name)))
+      setLoading(false)
+      return
+    }
+
     const [productsRes, workersRes, dealsRes] = await Promise.all([
       supabase.from('products').select('*').eq('business_id', businessId).gt('stock_quantity', 0).order('name'),
       supabase.from('workers').select('*').eq('business_id', businessId).eq('is_active', true).order('name'),
@@ -67,6 +80,12 @@ export default function POS() {
     setDeals(dealsRes.data as Deal[] || [])
     setSellerId(prev => prev !== 'profile' || activeWorkers.length === 0 ? prev : activeWorkers[0].id)
     setLoading(false)
+
+    // Refresh the offline cache in the background so it's ready if the
+    // connection drops (cache ALL products here, not just in-stock ones,
+    // since stock can free up while offline via cart quantity changes).
+    supabase.from('products').select('*').eq('business_id', businessId)
+      .then(({ data }) => { if (data) offlineSync.cacheRecords('products', businessId, data) })
   }
 
   function addToCart(p: Product) {
@@ -142,12 +161,7 @@ export default function POS() {
       total_cost: c.buying_price * c.qty,
     }))
 
-    // Single atomic RPC: inserts the sale + items, decrements stock with a
-    // guarded UPDATE (prevents overselling from concurrent checkouts), and
-    // records a debt for any non-fully-paid sale — all in one DB transaction
-    // so a failure (e.g. insufficient stock) rolls back everything instead of
-    // leaving a half-recorded sale.
-    const { data, error } = await supabase.rpc('process_sale', {
+    const rpcArgs = {
       p_business_id: currentBusiness.id,
       p_cashier_id: user!.id,
       p_cashier_worker_id: selectedWorker?.id || null,
@@ -162,7 +176,53 @@ export default function POS() {
       p_amount_paid: amountPaidValue,
       p_change_given: payment.method === 'credit' ? 0 : change,
       p_items: items,
-    })
+    }
+
+    // Offline: queue the checkout to replay once back online (see
+    // offlineSync.ts / process_sale RPC) instead of failing outright, and
+    // hand the cashier a receipt immediately with stock optimistically
+    // reduced in this session's view. Cross-device stock accuracy during the
+    // offline window isn't guaranteed until sync — the atomic RPC still
+    // guards against oversell at that point, it just can't do so live.
+    if (!offlineSync.getOnlineStatus()) {
+      await offlineSync.queueOperation(currentBusiness.id, user!.id, 'process_sale', 'rpc', rpcArgs)
+
+      const offlineSale: Sale = {
+        id: crypto.randomUUID(),
+        business_id: currentBusiness.id,
+        cashier_id: user!.id,
+        cashier_worker_id: selectedWorker?.id,
+        cashier_name: sellerName,
+        customer_name: customer.name || undefined,
+        customer_phone: customer.phone || undefined,
+        subtotal, discount, total,
+        payment_method: payment.method as Sale['payment_method'],
+        payment_status: paymentStatus,
+        amount_paid: amountPaidValue,
+        change_given: payment.method === 'credit' ? 0 : change,
+        created_at: new Date().toISOString(),
+      }
+
+      setProducts(prev => prev.map(p => {
+        const c = cart.find(ci => ci.id === p.id)
+        return c ? { ...p, stock_quantity: p.stock_quantity - c.qty } : p
+      }))
+
+      setReceiptOffline(true)
+      setReceipt({ ...offlineSale, items: items.map((it, i) => ({ ...it, id: `${offlineSale.id}-${i}`, sale_id: offlineSale.id })) })
+      setCart([])
+      setCustomer({ name: '', phone: '' })
+      setPayment({ method: 'cash', amount_paid: 0, discount: 0 })
+      setProcessing(false)
+      return
+    }
+
+    // Single atomic RPC: inserts the sale + items, decrements stock with a
+    // guarded UPDATE (prevents overselling from concurrent checkouts), and
+    // records a debt for any non-fully-paid sale — all in one DB transaction
+    // so a failure (e.g. insufficient stock) rolls back everything instead of
+    // leaving a half-recorded sale.
+    const { data, error } = await supabase.rpc('process_sale', rpcArgs)
 
     const sale = Array.isArray(data) ? data[0] : data
     if (error || !sale) {
@@ -179,6 +239,7 @@ export default function POS() {
       if (dealErr) console.error('Error updating deal usage:', dealErr)
     }
 
+    setReceiptOffline(false)
     setReceipt({ ...sale, items: items.map((it, i) => ({ ...it, id: `${sale.id}-${i}`, sale_id: sale.id })) })
     setCart([])
     setCustomer({ name: '', phone: '' })
@@ -392,6 +453,12 @@ export default function POS() {
               <button className="btn btn-ghost btn-sm" onClick={() => setReceipt(null)}><X size={16} /></button>
             </div>
             <div className="modal-body receipt-body">
+              {receiptOffline && (
+                <div className="alert alert-error no-print" style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 12 }}>
+                  <WifiOff size={14} />
+                  {t('offline_sale_pending') || 'Recorded offline — will sync automatically once back online.'}
+                </div>
+              )}
               <div className="receipt-header">
                 <h2>{currentBusiness?.name || profile?.shop_name}</h2>
                 <p>{t('receipt_no')} {receipt.id.slice(0, 8).toUpperCase()}</p>
