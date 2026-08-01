@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useEffect, useState, useCallback } from 'react'
 import { supabase } from '../lib/supabase'
+import { systemNotifications } from '../lib/systemNotifications'
 import type { Business, BusinessUser } from '../types'
 
 interface BusinessCtx {
@@ -101,6 +102,8 @@ export function BusinessProvider({ children }: { children: React.ReactNode }) {
     if (business) {
       localStorage.setItem('currentBusinessId', business.id)
       setBusinessRole((business as any)._role || 'owner')
+      // Show system notification for business switch
+      systemNotifications.showBusinessSwitchNotification(business.name)
     } else {
       localStorage.removeItem('currentBusinessId')
       setBusinessRole(null)

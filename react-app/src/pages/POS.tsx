@@ -2,6 +2,8 @@ import { useEffect, useState } from 'react'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../contexts/AuthContext'
 import { useLang } from '../contexts/LangContext'
+import { useBusiness } from '../contexts/BusinessContext'
+import { systemNotifications } from '../lib/systemNotifications'
 import type { Product, CartItem, Sale, Worker } from '../types'
 import { Search, Trash2, X, Printer, ShoppingCart as CartIcon, Package } from 'lucide-react'
 
@@ -143,6 +145,11 @@ export default function POS() {
     setCart([])
     setCustomer({ name: '', phone: '' })
     setPayment({ method: 'cash', amount_paid: 0, discount: 0 })
+    
+    // Show system notification for sale
+    const currency = profile?.business_id ? 'TZS' : 'USD'
+    systemNotifications.showSaleNotification(total, currency)
+    
     load()
     setProcessing(false)
   }

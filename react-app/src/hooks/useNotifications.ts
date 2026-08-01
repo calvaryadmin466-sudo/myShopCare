@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../contexts/AuthContext'
+import { systemNotifications } from '../lib/systemNotifications'
 import type { Product } from '../types'
 
 export interface AppNotification {
@@ -20,6 +21,7 @@ export function useNotifications() {
   const { profile } = useAuth()
   const [notifications, setNotifications] = useState<AppNotification[]>([])
   const [loading, setLoading] = useState(true)
+  const [permissionRequested, setPermissionRequested] = useState(false)
 
   const loadNotifications = useCallback(async () => {
     const businessId = profile?.business_id || profile?.shop_id
@@ -41,6 +43,7 @@ export function useNotifications() {
 
     const products = (data as Product[]) || []
     const list: AppNotification[] = []
+    const previousNotifications = notifications
 
     const today = new Date()
     today.setHours(0, 0, 0, 0)
@@ -58,6 +61,18 @@ export function useNotifications() {
           lowStockThreshold: p.low_stock_threshold,
           unit: p.unit || 'pcs'
         })
+
+        // Check if this is a new low stock notification
+        const wasPreviouslyNotified = previousNotifications.some(
+          n => n.id === `low-stock-${p.id}`
+        )
+        if (!wasPreviouslyNotified && systemNotifications.isPermissionGranted()) {
+          systemNotifications.showLowStockNotification(
+            p.name,
+            p.stock_quantity,
+            p.low_stock_threshold
+          )
+        }
       }
 
       // 2. Evaluate Expiry Date Alert
@@ -83,7 +98,7 @@ export function useNotifications() {
 
     setNotifications(list)
     setLoading(false)
-  }, [profile?.business_id, profile?.shop_id])
+  }, [profile?.business_id, profile?.shop_id, notifications])
 
   useEffect(() => {
     const businessId = profile?.business_id || profile?.shop_id
@@ -91,6 +106,13 @@ export function useNotifications() {
       setNotifications([])
       setLoading(false)
       return
+    }
+
+    // Request notification permission on first load
+    if (!permissionRequested && !systemNotifications.isPermissionDenied()) {
+      systemNotifications.requestPermission().then(granted => {
+        setPermissionRequested(true)
+      })
     }
 
     const channel = supabase
@@ -109,7 +131,7 @@ export function useNotifications() {
       window.clearInterval(refreshTimer)
       supabase.removeChannel(channel)
     }
-  }, [profile?.business_id, profile?.shop_id, loadNotifications])
+  }, [profile?.business_id, profile?.shop_id, loadNotifications, permissionRequested])
 
-  return { notifications, loading, refetch: loadNotifications }
+  return { notifications, loading, refetch: loadNotifications, requestPermission: () => systemNotifications.requestPermission() }
 }
