@@ -130,7 +130,6 @@ export default function Reports() {
       .select('id,created_at,payment_method,payment_status,amount_paid,change_given,total,customer_name,cashier_name,business_id,sale_items(id,product_id,product_name,quantity,unit_price,total_price,unit_cost,total_cost)')
       .eq('business_id', profile.business_id || profile.shop_id)
       .gte('created_at', startIso)
-      .lt('created_at', endIso)
       .order('created_at', { ascending: false })
       .limit(2000)
 
@@ -144,7 +143,6 @@ export default function Reports() {
       .from('debt_payments')
       .select('id,amount,payment_method,created_at,debt:debts(id,business_id,sale_id)')
       .gte('created_at', startIso)
-      .lt('created_at', endIso)
       .order('created_at', { ascending: false })
 
     if (debtPaymentsError) console.error('Error loading debt payments for reports:', debtPaymentsError)
@@ -175,7 +173,6 @@ export default function Reports() {
       .select('*')
       .eq('business_id', businessId)
       .gte('expense_date', startIso)
-      .lt('expense_date', endIso)
       .order('expense_date', { ascending: false })
       .limit(2000)
 
