@@ -212,13 +212,34 @@ export function BusinessProvider({ children }: { children: React.ReactNode }) {
     }
   }, [currentBusiness, businesses, loadBusinesses, setCurrentBusiness])
 
-  // Get current user ID
+  // Track current user ID and clear business state on sign-out / account switch
   useEffect(() => {
+    let mounted = true
+
     supabase.auth.getUser().then(({ data: { user } }) => {
-      if (user) {
-        setUserId(user.id)
-      }
+      if (mounted) setUserId(user?.id ?? null)
     })
+
+    const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (!mounted) return
+      const nextId = session?.user?.id ?? null
+      setUserId(prev => {
+        if (prev === nextId) return prev
+        if (!nextId) {
+          // Signed out: clear business state so the next login doesn't inherit stale data
+          setBusinesses([])
+          setCurrentBusinessState(null)
+          setBusinessRole(null)
+          localStorage.removeItem('currentBusinessId')
+        }
+        return nextId
+      })
+    })
+
+    return () => {
+      mounted = false
+      listener.subscription.unsubscribe()
+    }
   }, [])
 
   // Load businesses when userId is set

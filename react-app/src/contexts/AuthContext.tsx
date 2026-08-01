@@ -27,26 +27,29 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [accessLoading, setAccessLoading] = useState(false)
   const [accessAllowed, setAccessAllowed] = useState(true)
   const [accessReason, setAccessReason] = useState<string | null>(null)
-  const fetchingRef = useRef(false)
+  // Tracks the most recently requested uid so a slower, stale fetch can't
+  // clobber the result of a newer one (e.g. fast sign-out -> sign-in as a
+  // different user).
+  const latestUidRef = useRef<string | null>(null)
 
   async function fetchProfile(uid: string) {
-    // Prevent duplicate concurrent fetches
-    if (fetchingRef.current) return
-    fetchingRef.current = true
-    console.log('AuthContext: Fetching profile for uid:', uid)
+    latestUidRef.current = uid
+    // Only apply results if this is still the most recently requested uid —
+    // a stale in-flight fetch for a previous user must not overwrite newer state.
+    const isStale = () => latestUidRef.current !== uid
     try {
       const { data, error } = await supabase
         .from('profiles')
         .select('*')
         .eq('id', uid)
         .maybeSingle()
-      console.log('AuthContext: Profile data:', data, 'Error:', error)
-      
+
+      if (isStale()) return
+
       if (error) {
         console.error('AuthContext: Error fetching profile:', error)
         setProfile(null)
       } else if (!data) {
-        console.log('AuthContext: No profile found, creating default profile')
         // Create default profile if it doesn't exist
         const { data: userData } = await supabase.auth.getUser()
         if (userData?.user) {
@@ -64,7 +67,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
           if (businessError) {
             console.error('AuthContext: Error creating business:', businessError)
-            setProfile(null)
+            if (!isStale()) setProfile(null)
             return
           }
 
@@ -93,22 +96,22 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
               })
           }
 
+          if (isStale()) return
+
           if (insertError) {
             console.error('AuthContext: Error creating profile:', insertError)
             setProfile(null)
           } else {
-            console.log('AuthContext: Created profile:', newProfile)
             setProfile(newProfile as Profile)
           }
-        } else {
+        } else if (!isStale()) {
           setProfile(null)
         }
       } else {
         setProfile(data as Profile | null)
       }
     } finally {
-      fetchingRef.current = false
-      setLoading(false)
+      if (!isStale()) setLoading(false)
     }
   }
 

@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion'
 import { useBusiness } from '../contexts/BusinessContext'
 import { useAuth } from '../contexts/AuthContext'
 import { uploadBusinessLogo, deleteBusinessLogo } from '../lib/logoUpload'
-import { Building2, Plus, Edit, Settings, Users, Image as ImageIcon, Trash2, X, Archive, BarChart3, DollarSign, Calendar, Clock, Palette, Upload } from 'lucide-react'
+import { Building2, Plus, Edit, Settings, Image as ImageIcon, Trash2, X, Archive, BarChart3, DollarSign, Calendar, Clock, Palette, Upload } from 'lucide-react'
 
 function fmt(n: number) {
   return new Intl.NumberFormat('sw-TZ', { style: 'decimal', maximumFractionDigits: 0 }).format(n)
@@ -41,10 +41,7 @@ export default function BusinessManagement() {
     currency: 'TZS' as 'USD' | 'TZS' | 'KSH'
   })
 
-  const handleLogoUpload = async (e: React.ChangeEvent<HTMLInputElement>, business: any) => {
-    const file = e.target.files?.[0]
-    if (!file) return
-
+  const uploadLogoFile = async (file: File, business: any) => {
     if (file.size > 5 * 1024 * 1024) {
       setError('File size must be less than 5MB')
       return
@@ -64,10 +61,15 @@ export default function BusinessManagement() {
     }, 100)
 
     try {
+      // Clean up the previous logo (if any) so files don't orphan in storage
+      if (business.logo_url) {
+        await deleteBusinessLogo(business.id)
+      }
+
       const result = await uploadBusinessLogo(file, business.id)
       clearInterval(progressInterval)
       setUploadProgress(100)
-      
+
       if (result.error) {
         setError(result.error)
       } else {
@@ -81,6 +83,12 @@ export default function BusinessManagement() {
         setShowLogoUploadModal(false)
       }, 500)
     }
+  }
+
+  const handleLogoUpload = async (e: React.ChangeEvent<HTMLInputElement>, business: any) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    await uploadLogoFile(file, business)
   }
 
   const handleCreate = async (e: React.FormEvent) => {
@@ -149,6 +157,12 @@ export default function BusinessManagement() {
     }
   }
 
+  const openCreateModal = () => {
+    setFormData({ name: '', themeColor: '#F7B23B', currency: 'TZS' })
+    setError(null)
+    setShowCreateModal(true)
+  }
+
   const openEditModal = (business: any) => {
     setEditingBusiness(business)
     setFormData({
@@ -184,7 +198,7 @@ export default function BusinessManagement() {
         Create your first business to start managing invoices, customers, products, and reports.
       </p>
       <button
-        onClick={() => setShowCreateModal(true)}
+        onClick={openCreateModal}
         className="btn btn-primary"
         style={{ padding: '12px 32px' }}
       >
@@ -280,13 +294,6 @@ export default function BusinessManagement() {
           </button>
           <div className="grid grid-cols-2 gap-2">
             <button
-              className="flex items-center justify-center gap-2 px-4 py-3 rounded-xl transition-all hover:bg-[var(--accent-light)]"
-              style={{ border: '1px solid var(--border)', fontSize: '0.875rem' }}
-            >
-              <Users size={16} />
-              <span>Users</span>
-            </button>
-            <button
               onClick={() => {
                 setEditingBusiness(business)
                 setShowSettingsModal(true)
@@ -297,8 +304,6 @@ export default function BusinessManagement() {
               <Settings size={16} />
               <span>Settings</span>
             </button>
-          </div>
-          <div className="grid grid-cols-2 gap-2">
             <button
               onClick={() => {
                 setEditingBusiness(business)
@@ -310,15 +315,15 @@ export default function BusinessManagement() {
               <ImageIcon size={16} />
               <span>Upload Logo</span>
             </button>
-            <button
-              onClick={() => handleDelete(business.id)}
-              className="flex items-center justify-center gap-2 px-4 py-3 rounded-xl transition-all hover:bg-red-500/10"
-              style={{ border: '1px solid var(--border)', fontSize: '0.875rem', color: 'var(--red)' }}
-            >
-              <Trash2 size={16} />
-              <span>Delete</span>
-            </button>
           </div>
+          <button
+            onClick={() => handleDelete(business.id)}
+            className="w-full flex items-center justify-center gap-2 px-4 py-3 rounded-xl transition-all hover:bg-red-500/10"
+            style={{ border: '1px solid var(--border)', fontSize: '0.875rem', color: 'var(--red)' }}
+          >
+            <Trash2 size={16} />
+            <span>Delete</span>
+          </button>
         </div>
 
       </motion.div>
@@ -336,7 +341,7 @@ export default function BusinessManagement() {
           </p>
         </div>
         <button
-          onClick={() => setShowCreateModal(true)}
+          onClick={openCreateModal}
           className="btn btn-primary"
         >
           <Plus size={20} />
@@ -610,11 +615,7 @@ export default function BusinessManagement() {
                   e.preventDefault()
                   const file = e.dataTransfer.files[0]
                   if (file && file.type.startsWith('image/')) {
-                    const input = document.createElement('input')
-                    input.type = 'file'
-                    input.accept = 'image/*'
-                    input.files = e.dataTransfer.files
-                    handleLogoUpload({ target: input } as any, editingBusiness)
+                    await uploadLogoFile(file, editingBusiness)
                   }
                 }}
               >

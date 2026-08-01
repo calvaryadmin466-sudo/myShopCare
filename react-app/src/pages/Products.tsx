@@ -2,9 +2,10 @@ import { useEffect, useState } from 'react'
 import { supabase } from '../lib/supabase'
 import { uploadProductImage } from '../lib/uploadImage'
 import { useAuth } from '../contexts/AuthContext'
+import { useBusiness } from '../contexts/BusinessContext'
 import { useLang } from '../contexts/LangContext'
 import type { Product } from '../types'
-import { Plus, Search, Edit2, Trash2, X, Package, Camera, Image as ImageIcon, CalendarX } from 'lucide-react'
+import { Plus, Search, Edit2, Trash2, X, Package, Camera, Image as ImageIcon, CalendarX, AlertTriangle } from 'lucide-react'
 
 const UNITS = ['pcs', 'kg', 'g', 'litre', 'ml', 'box', 'pack', 'dozen', 'metre']
 
@@ -49,6 +50,7 @@ function TableSkeleton({ cols }: { cols: number }) {
 
 export default function Products() {
   const { profile } = useAuth()
+  const { currentBusiness, loading: businessLoading } = useBusiness()
   const { t } = useLang()
   const [products, setProducts] = useState<Product[]>([])
   const [loading, setLoading] = useState(true)
@@ -61,49 +63,56 @@ export default function Products() {
   const [uploading, setUploading] = useState(false)
   const [error, setError] = useState('')
 
-  useEffect(() => { 
-    if (profile) {
+  useEffect(() => {
+    // Wait for the business context to finish resolving before deciding what to do
+    if (businessLoading) return
+
+    if (profile && currentBusiness?.id) {
       load()
-      
-      // Set up real-time subscription for product inventory changes
-      const businessId = profile.business_id || profile.shop_id
-      if (businessId) {
-        const subscription = supabase
-          .channel('products-inventory-updates')
-          .on('postgres_changes', {
-            event: 'UPDATE',
-            schema: 'public',
-            table: 'products',
-            filter: `business_id=eq.${businessId}`
-          }, (payload) => {
-            console.log('Products: Product updated', payload)
-            load() // Reload products when inventory changes
-          })
-          .subscribe()
-        
-        return () => {
-          subscription.unsubscribe()
-        }
+
+      // Set up real-time subscription for product inventory changes, scoped to the selected business
+      const businessId = currentBusiness.id
+      const subscription = supabase
+        .channel('products-inventory-updates')
+        .on('postgres_changes', {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'products',
+          filter: `business_id=eq.${businessId}`
+        }, () => {
+          load() // Reload products when inventory changes
+        })
+        .subscribe()
+
+      return () => {
+        subscription.unsubscribe()
       }
+    } else {
+      // No business selected/available for this user
+      setProducts([])
+      setLoading(false)
     }
-  }, [profile])
+  }, [profile, currentBusiness?.id, businessLoading])
 
   async function load() {
-    const { data } = await supabase.from('products').select('*').eq('business_id', profile!.business_id || profile!.shop_id).order('name')
+    const businessId = currentBusiness?.id
+    if (!businessId) { setProducts([]); setLoading(false); return }
+    const { data } = await supabase.from('products').select('*').eq('business_id', businessId).order('name')
     setProducts(data as Product[] || [])
     setLoading(false)
   }
 
-  function openAdd() { setForm({ ...EMPTY }); setEditing(null); setModal('add'); setError('') }
+  function openAdd() { setForm({ ...EMPTY, business_id: currentBusiness?.id || '' }); setEditing(null); setModal('add'); setError('') }
   function openEdit(p: Product) { setForm({ name: p.name, sku: p.sku || '', description: p.description || '', category: p.category, buying_price: p.buying_price, selling_price: p.selling_price, stock_quantity: p.stock_quantity, unit: p.unit, low_stock_threshold: p.low_stock_threshold, image_url: p.image_url || '', expiry_date: p.expiry_date || '', expiry_days_alert: p.expiry_days_alert ?? 30, business_id: p.business_id || p.shop_id || '' }); setEditing(p); setModal('edit'); setError('') }
 
   async function pickImage(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
     e.target.value = ''
     if (!file) return
+    if (!currentBusiness?.id) { setError('No business selected'); return }
     setUploading(true); setError('')
     try {
-      const url = await uploadProductImage(file, profile!.business_id || profile!.shop_id || '')
+      const url = await uploadProductImage(file, currentBusiness.id)
       setForm(f => ({ ...f, image_url: url }))
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Image upload failed')
@@ -113,8 +122,20 @@ export default function Products() {
 
   async function save() {
     if (!form.name) { setError('Product name is required'); return }
+    if (!currentBusiness?.id) { setError('No business selected'); return }
+    const buyingPrice = +form.buying_price
+    const sellingPrice = +form.selling_price
+    const stockQuantity = +form.stock_quantity
+    if (buyingPrice < 0 || sellingPrice < 0 || stockQuantity < 0) {
+      setError('Buying price, selling price and stock quantity cannot be negative')
+      return
+    }
+    if (sellingPrice < buyingPrice) {
+      setError('Selling price cannot be less than buying price')
+      return
+    }
     setSaving(true)
-    const payload = { ...form, category: form.category.trim() || 'General', description: form.description?.trim() || null, image_url: form.image_url || null, buying_price: +form.buying_price, selling_price: +form.selling_price, stock_quantity: +form.stock_quantity, low_stock_threshold: +form.low_stock_threshold, expiry_date: form.expiry_date || null, expiry_days_alert: +form.expiry_days_alert || 30, shop_id: profile!.shop_id }
+    const payload = { ...form, business_id: currentBusiness.id, category: form.category.trim() || 'General', description: form.description?.trim() || null, image_url: form.image_url || null, buying_price: buyingPrice, selling_price: sellingPrice, stock_quantity: stockQuantity, low_stock_threshold: +form.low_stock_threshold, expiry_date: form.expiry_date || null, expiry_days_alert: +form.expiry_days_alert || 30, shop_id: profile!.shop_id }
     if (editing) {
       const { error: err } = await supabase.from('products').update(payload).eq('id', editing.id)
       if (err) { setError(err.message || 'Error updating product'); setSaving(false); return }
@@ -129,7 +150,15 @@ export default function Products() {
 
   async function deleteProduct(id: string) {
     if (!confirm(t('confirm_delete'))) return
-    await supabase.from('products').delete().eq('id', id)
+    const { error: err } = await supabase.from('products').delete().eq('id', id)
+    if (err) {
+      if (err.code === '23503') {
+        alert('Cannot delete: this product has sales history')
+      } else {
+        alert(err.message || 'Error deleting product')
+      }
+      return
+    }
     load()
   }
 
@@ -140,6 +169,19 @@ export default function Products() {
     const matchCat = catFilter === 'all' || p.category === catFilter
     return matchSearch && matchCat
   })
+
+  if (!businessLoading && !currentBusiness) return (
+    <div>
+      <div className="page-header">
+        <h2><Package size={20} />{t('products')}</h2>
+      </div>
+      <div className="card" style={{ textAlign: 'center', padding: '48px 24px' }}>
+        <AlertTriangle size={48} style={{ color: 'var(--yellow)', marginBottom: 16 }} />
+        <h3 style={{ marginBottom: 8 }}>No Business Selected</h3>
+        <p style={{ color: 'var(--text3)' }}>Select or create a business from the header to manage products.</p>
+      </div>
+    </div>
+  )
 
   return (
     <div>

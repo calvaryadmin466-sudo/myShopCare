@@ -1,5 +1,6 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
-import { ShoppingCart } from 'lucide-react'
+import { ShoppingCart, AlertTriangle } from 'lucide-react'
+import { isSupabaseConfigured } from './lib/supabase'
 import { AuthProvider, useAuth } from './contexts/AuthContext'
 import { LangProvider } from './contexts/LangContext'
 import { ThemeProvider } from './contexts/ThemeContext'
@@ -17,6 +18,28 @@ import Deals from './pages/Deals'
 import Settings from './pages/Settings'
 import Reports from './pages/Reports'
 import BusinessManagement from './pages/BusinessManagement'
+
+function ConfigErrorScreen() {
+  return (
+    <div className="loading-screen">
+      <div style={{ textAlign: 'center', maxWidth: 380 }}>
+        <div style={{
+          width: 56, height: 56, borderRadius: 14,
+          background: 'var(--red-light)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          margin: '0 auto 16px', color: 'var(--red)'
+        }}><AlertTriangle size={30} /></div>
+        <h2 style={{ fontFamily: 'var(--font-display)', fontSize: '1.4rem', color: 'var(--red)', marginBottom: 8 }}>
+          App Not Configured
+        </h2>
+        <p style={{ color: 'var(--text3)', fontSize: '0.85rem' }}>
+          myShopCare is missing its Supabase configuration (VITE_SUPABASE_URL / VITE_SUPABASE_ANON_KEY).
+          Please contact the administrator to fix the deployment configuration.
+        </p>
+      </div>
+    </div>
+  )
+}
 
 function LoadingScreen() {
   return (
@@ -54,6 +77,10 @@ function PublicRoute({ children }: { children: React.ReactNode }) {
 }
 
 export default function App() {
+  if (!isSupabaseConfigured) {
+    return <ConfigErrorScreen />
+  }
+
   return (
     <BrowserRouter>
       <AuthProvider>

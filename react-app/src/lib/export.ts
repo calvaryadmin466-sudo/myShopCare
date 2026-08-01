@@ -1,3 +1,5 @@
+import * as XLSX from 'xlsx'
+
 export type ExportFormat = 'csv' | 'excel' | 'pdf'
 
 export interface ExportOptions {
@@ -21,31 +23,40 @@ export function exportData({ filename, format, data, columns }: ExportOptions) {
   }
 }
 
+function escapeCsvCell(cell: any): string {
+  const value = cell === null || cell === undefined ? '' : String(cell)
+  if (/[",\n\r]/.test(value)) {
+    return `"${value.replace(/"/g, '""')}"`
+  }
+  return value
+}
+
 function exportCSV(filename: string, data: any[], columns: { key: string; label: string }[]) {
   const headers = columns.map(c => c.label)
   const rows = data.map(row => columns.map(c => row[c.key]))
-  
+
   const csvContent = [
-    headers.join(','),
-    ...rows.map(row => row.map(cell => `"${cell}"`).join(','))
+    headers.map(escapeCsvCell).join(','),
+    ...rows.map(row => row.map(escapeCsvCell).join(','))
   ].join('\n')
-  
+
   const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' })
   downloadBlob(`${filename}.csv`, blob)
 }
 
 function exportExcel(filename: string, data: any[], columns: { key: string; label: string }[]) {
-  // Simple Excel export using CSV with .xlsx extension
-  // For full Excel support, would need xlsx library
-  const headers = columns.map(c => c.label)
-  const rows = data.map(row => columns.map(c => row[c.key]))
-  
-  const csvContent = [
-    headers.join('\t'),
-    ...rows.map(row => row.map(cell => cell).join('\t'))
-  ].join('\n')
-  
-  const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' })
+  const rows = data.map(row => {
+    const record: Record<string, any> = {}
+    columns.forEach(c => { record[c.label] = row[c.key] })
+    return record
+  })
+
+  const worksheet = XLSX.utils.json_to_sheet(rows, { header: columns.map(c => c.label) })
+  const workbook = XLSX.utils.book_new()
+  XLSX.utils.book_append_sheet(workbook, worksheet, 'Sheet1')
+
+  const wbArray = XLSX.write(workbook, { bookType: 'xlsx', type: 'array' })
+  const blob = new Blob([wbArray], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' })
   downloadBlob(`${filename}.xlsx`, blob)
 }
 

@@ -1,9 +1,9 @@
 import { useEffect, useState } from 'react'
 import { supabase } from '../lib/supabase'
-import { useAuth } from '../contexts/AuthContext'
+import { useBusiness } from '../contexts/BusinessContext'
 import { useLang } from '../contexts/LangContext'
 import type { AuditLog } from '../types'
-import { Search, Download, Filter, ChevronDown, ChevronUp } from 'lucide-react'
+import { Search, Download, Filter, ChevronDown, ChevronUp, AlertTriangle } from 'lucide-react'
 import { exportData } from '../lib/export'
 
 interface AuditLogViewerProps {
@@ -11,28 +11,36 @@ interface AuditLogViewerProps {
   limit?: number
 }
 
+interface UserInfo {
+  full_name?: string
+  email?: string
+}
+
 export function AuditLogViewer({ tableFilter, limit = 50 }: AuditLogViewerProps) {
-  const { profile } = useAuth()
+  const { currentBusiness } = useBusiness()
   const { t } = useLang()
   const [logs, setLogs] = useState<AuditLog[]>([])
+  const [userMap, setUserMap] = useState<Record<string, UserInfo>>({})
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
   const [search, setSearch] = useState('')
   const [actionFilter, setActionFilter] = useState<string>('all')
   const [tableFilterState, setTableFilterState] = useState<string>(tableFilter || 'all')
   const [expandedLog, setExpandedLog] = useState<string | null>(null)
 
   useEffect(() => {
-    if (profile) loadLogs()
-  }, [profile, tableFilter])
+    if (currentBusiness?.id) loadLogs()
+  }, [currentBusiness?.id, tableFilter])
 
   async function loadLogs() {
-    if (!profile) return
+    if (!currentBusiness?.id) return
     setLoading(true)
+    setError(null)
 
     let query = supabase
       .from('audit_logs')
       .select('*')
-      .eq('business_id', profile.business_id || profile.shop_id)
+      .eq('business_id', currentBusiness.id)
       .order('created_at', { ascending: false })
       .limit(limit)
 
@@ -43,10 +51,42 @@ export function AuditLogViewer({ tableFilter, limit = 50 }: AuditLogViewerProps)
     const { data, error } = await query
     if (error) {
       console.error('Error loading audit logs:', error)
-    } else {
-      setLogs(data || [])
+      setError(error.message || 'Failed to load audit logs')
+      setLogs([])
+      setLoading(false)
+      return
     }
+
+    const logRows = data || []
+    setLogs(logRows)
+
+    // Look up display names for the acting users
+    const userIds = Array.from(new Set(logRows.map(l => l.user_id).filter(Boolean)))
+    if (userIds.length > 0) {
+      const { data: profiles, error: profilesError } = await supabase
+        .from('profiles')
+        .select('id, full_name, email')
+        .in('id', userIds)
+
+      if (profilesError) {
+        console.error('Error loading user profiles for audit log:', profilesError)
+      } else {
+        const map: Record<string, UserInfo> = {}
+        for (const p of profiles || []) {
+          map[p.id] = { full_name: p.full_name, email: p.email }
+        }
+        setUserMap(map)
+      }
+    } else {
+      setUserMap({})
+    }
+
     setLoading(false)
+  }
+
+  function getUserLabel(userId: string) {
+    const info = userMap[userId]
+    return info?.full_name || info?.email || userId
   }
 
   const filteredLogs = logs.filter(log => {
@@ -71,13 +111,16 @@ export function AuditLogViewer({ tableFilter, limit = 50 }: AuditLogViewerProps)
       { key: 'table_name', label: 'Table' },
       { key: 'action', label: 'Action' },
       { key: 'record_id', label: 'Record ID' },
+      { key: 'user_name', label: 'User' },
       { key: 'user_id', label: 'User ID' },
     ]
+
+    const exportRows = filteredLogs.map(log => ({ ...log, user_name: getUserLabel(log.user_id) }))
 
     exportData({
       filename: `audit_logs_${new Date().toISOString().split('T')[0]}`,
       format,
-      data: filteredLogs,
+      data: exportRows,
       columns
     })
   }
@@ -149,6 +192,12 @@ export function AuditLogViewer({ tableFilter, limit = 50 }: AuditLogViewerProps)
             <div className="skeleton" style={{ height: 16, width: '60%', marginBottom: 8 }} />
             <div className="skeleton" style={{ height: 16, width: '40%' }} />
           </div>
+        ) : error ? (
+          <div className="card" style={{ textAlign: 'center', padding: '32px 24px' }}>
+            <AlertTriangle size={32} style={{ color: 'var(--red)', marginBottom: 12 }} />
+            <p style={{ color: 'var(--text3)', marginBottom: 16 }}>Failed to load audit logs: {error}</p>
+            <button className="btn btn-primary" onClick={() => loadLogs()}>{t('retry') || 'Retry'}</button>
+          </div>
         ) : filteredLogs.length === 0 ? (
           <div className="empty-state">
             <p>No audit logs found</p>
@@ -187,6 +236,11 @@ export function AuditLogViewer({ tableFilter, limit = 50 }: AuditLogViewerProps)
                     {log.record_id && (
                       <span style={{ fontSize: '0.8rem', color: 'var(--text3)' }}>
                         ID: {log.record_id.slice(0, 8)}...
+                      </span>
+                    )}
+                    {log.user_id && (
+                      <span style={{ fontSize: '0.8rem', color: 'var(--text2)' }}>
+                        by {getUserLabel(log.user_id)}
                       </span>
                     )}
                   </div>

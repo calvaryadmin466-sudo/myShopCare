@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../contexts/AuthContext'
 import { systemNotifications } from '../lib/systemNotifications'
@@ -22,6 +22,10 @@ export function useNotifications() {
   const [notifications, setNotifications] = useState<AppNotification[]>([])
   const [loading, setLoading] = useState(true)
   const [permissionRequested, setPermissionRequested] = useState(false)
+  // Mirrors `notifications` without being a dependency, so loadNotifications keeps
+  // a stable identity and doesn't force the realtime subscription below to
+  // tear down and resubscribe on every single notification update.
+  const notificationsRef = useRef<AppNotification[]>([])
 
   const loadNotifications = useCallback(async () => {
     const businessId = profile?.business_id || profile?.shop_id
@@ -43,7 +47,7 @@ export function useNotifications() {
 
     const products = (data as Product[]) || []
     const list: AppNotification[] = []
-    const previousNotifications = notifications
+    const previousNotifications = notificationsRef.current
 
     const today = new Date()
     today.setHours(0, 0, 0, 0)
@@ -96,9 +100,10 @@ export function useNotifications() {
       }
     })
 
+    notificationsRef.current = list
     setNotifications(list)
     setLoading(false)
-  }, [profile?.business_id, profile?.shop_id, notifications])
+  }, [profile?.business_id, profile?.shop_id])
 
   useEffect(() => {
     const businessId = profile?.business_id || profile?.shop_id

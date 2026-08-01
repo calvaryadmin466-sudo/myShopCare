@@ -1,7 +1,8 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../contexts/AuthContext'
 import { useLang } from '../contexts/LangContext'
+import { useBusiness } from '../contexts/BusinessContext'
 import type { Debt, DebtPayment } from '../types'
 import { Plus, Search, Calendar, Landmark, CheckCircle, Clock, X, Eye } from 'lucide-react'
 
@@ -41,6 +42,7 @@ function TableSkeleton({ cols }: { cols: number }) {
 export default function Debts() {
   const { profile } = useAuth()
   const { t } = useLang()
+  const { currentBusiness } = useBusiness()
   const [debts, setDebts] = useState<Debt[]>([])
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
@@ -53,45 +55,51 @@ export default function Debts() {
   const [addForm, setAddForm] = useState({ customer_name: '', customer_phone: '', original_amount: 0, due_date: '', notes: '' })
   const [payForm, setPayForm] = useState({ amount: 0, payment_method: 'cash', notes: '' })
   const [saving, setSaving] = useState(false)
+  const [payError, setPayError] = useState('')
 
-  useEffect(() => { 
-    if (profile) {
-      load()
-      
-      // Set up real-time subscription for debt payments
-      const businessId = profile.business_id || profile.shop_id
-      if (businessId) {
-        const subscription = supabase
-          .channel('debts-payments-updates')
-          .on('postgres_changes', {
-            event: 'INSERT',
-            schema: 'public',
-            table: 'debt_payments'
-          }, (payload) => {
-            console.log('Debts: New payment recorded', payload)
-            load() // Reload debts when payments are recorded
-          })
-          .on('postgres_changes', {
-            event: 'UPDATE',
-            schema: 'public',
-            table: 'debts',
-            filter: `business_id=eq.${businessId}`
-          }, (payload) => {
-            console.log('Debts: Debt updated', payload)
-            load() // Reload debts when debt status changes
-          })
-          .subscribe()
-        
-        return () => {
-          subscription.unsubscribe()
-        }
-      }
+  // debt_payments rows have no business_id column to filter a realtime
+  // subscription on directly, so this tracks which debt ids belong to the
+  // currently loaded (business-scoped) list, and only reloads when an
+  // incoming payment insert actually belongs to one of them.
+  const debtIdsRef = useRef<Set<string>>(new Set())
+
+  useEffect(() => {
+    if (!profile || !currentBusiness) return
+    load()
+
+    const businessId = currentBusiness.id
+    const subscription = supabase
+      .channel(`debts-payments-updates:${businessId}`)
+      .on('postgres_changes', {
+        event: 'INSERT',
+        schema: 'public',
+        table: 'debt_payments'
+      }, (payload) => {
+        const debtId = (payload.new as any)?.debt_id
+        if (debtId && debtIdsRef.current.has(debtId)) load()
+      })
+      .on('postgres_changes', {
+        event: 'UPDATE',
+        schema: 'public',
+        table: 'debts',
+        filter: `business_id=eq.${businessId}`
+      }, () => {
+        load()
+      })
+      .subscribe()
+
+    return () => {
+      subscription.unsubscribe()
     }
-  }, [profile])
+  }, [profile, currentBusiness])
 
   async function load() {
-    const { data } = await supabase.from('debts').select('*').eq('business_id', profile!.business_id || profile!.shop_id).order('created_at', { ascending: false })
-    setDebts(data as Debt[] || [])
+    if (!currentBusiness) return
+    const { data, error } = await supabase.from('debts').select('*').eq('business_id', currentBusiness.id).order('created_at', { ascending: false })
+    if (error) console.error('Error loading debts:', error)
+    const list = data as Debt[] || []
+    setDebts(list)
+    debtIdsRef.current = new Set(list.map(d => d.id))
     setLoading(false)
   }
 
@@ -101,27 +109,32 @@ export default function Debts() {
   }
 
   async function handleAddDebt() {
-    if (!addForm.customer_name || !addForm.original_amount) return
+    if (!addForm.customer_name || !addForm.original_amount || !currentBusiness) return
     setSaving(true)
     const { error } = await supabase.from('debts').insert({
       ...addForm,
       original_amount: +addForm.original_amount,
       amount_paid: 0,
-      business_id: profile!.business_id || profile!.shop_id,
+      business_id: currentBusiness.id,
       status: 'active'
     })
     setSaving(false)
-    if (!error) { setModal(null); setAddForm({ customer_name: '', customer_phone: '', original_amount: 0, due_date: '', notes: '' }); load() }
+    if (error) { alert('Failed to add debt: ' + error.message); return }
+    setModal(null); setAddForm({ customer_name: '', customer_phone: '', original_amount: 0, due_date: '', notes: '' }); load()
   }
 
   async function handleRecordPayment() {
-    if (!selected || !payForm.amount) return
+    if (!selected) return
+    const amount = +payForm.amount
+    if (!amount || amount <= 0) { setPayError(t('payment_amount_invalid') || 'Enter a valid payment amount.'); return }
+    if (amount > selected.balance) { setPayError(t('payment_exceeds_balance') || 'Payment cannot exceed the remaining balance.'); return }
+    setPayError('')
     setSaving(true)
 
     // Insert payment
     const { error: payErr } = await supabase.from('debt_payments').insert({
       debt_id: selected.id,
-      amount: +payForm.amount,
+      amount,
       payment_method: payForm.payment_method,
       notes: payForm.notes
     })
@@ -134,7 +147,7 @@ export default function Debts() {
     }
 
     // Update debt
-    const newPaid = selected.amount_paid + +payForm.amount
+    const newPaid = selected.amount_paid + amount
     const newStatus = newPaid >= selected.original_amount ? 'paid' : selected.status
 
     const { error: debtErr } = await supabase.from('debts').update({
@@ -147,6 +160,28 @@ export default function Debts() {
       alert('Error updating debt record: ' + debtErr.message)
       setSaving(false)
       return
+    }
+
+    // If this debt originated from a POS sale, sync the payment back onto
+    // that sale so Sales History reflects the debt being paid down instead
+    // of showing "Pending"/"Partial" forever.
+    if (selected.sale_id) {
+      const { data: saleRow, error: saleFetchErr } = await supabase
+        .from('sales')
+        .select('amount_paid, total')
+        .eq('id', selected.sale_id)
+        .maybeSingle()
+      if (saleFetchErr) {
+        console.error('Error fetching sale for debt sync:', saleFetchErr)
+      } else if (saleRow) {
+        const newSaleAmountPaid = saleRow.amount_paid + amount
+        const newSaleStatus = newSaleAmountPaid >= saleRow.total ? 'paid' : 'partial'
+        const { error: saleUpdateErr } = await supabase
+          .from('sales')
+          .update({ amount_paid: newSaleAmountPaid, payment_status: newSaleStatus })
+          .eq('id', selected.sale_id)
+        if (saleUpdateErr) console.error('Error syncing sale payment status:', saleUpdateErr)
+      }
     }
 
     setSaving(false)
@@ -217,7 +252,7 @@ export default function Debts() {
                       <div style={{ display: 'flex', gap: 6 }}>
                         <button className="btn btn-ghost btn-sm" onClick={() => { setSelected(d); loadPayments(d.id); setModal('details') }}><Eye size={13} /></button>
                         {d.balance > 0 && (
-                          <button className="btn btn-success btn-sm" onClick={() => { setSelected(d); setModal('pay') }}>✓ {t('record_payment')}</button>
+                          <button className="btn btn-success btn-sm" onClick={() => { setSelected(d); setPayForm({ amount: 0, payment_method: 'cash', notes: '' }); setPayError(''); setModal('pay') }}>✓ {t('record_payment')}</button>
                         )}
                       </div>
                     </td>
@@ -276,11 +311,12 @@ export default function Debts() {
               <button className="btn btn-ghost btn-sm" onClick={() => setModal(null)}><X size={16} /></button>
             </div>
             <div className="modal-body">
+              {payError && <div className="alert alert-error">{payError}</div>}
               <div className="summary-row"><span>{t('balance')}</span><strong>{fmt(selected.balance)} TZS</strong></div>
               <div className="divider" />
               <div className="form-group">
                 <label>{t('payment_amount')} * (TZS)</label>
-                <input type="number" max={selected.balance} value={payForm.amount || ''} onChange={e => setPayForm(f => ({ ...f, amount: +e.target.value }))} />
+                <input type="number" min="0" max={selected.balance} value={payForm.amount || ''} onChange={e => setPayForm(f => ({ ...f, amount: Math.max(0, +e.target.value || 0) }))} />
               </div>
               <div className="form-group">
                 <label>{t('payment_method')}</label>

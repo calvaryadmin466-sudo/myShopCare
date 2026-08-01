@@ -1,12 +1,15 @@
 import { useState, useEffect, type FormEvent } from 'react'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../contexts/AuthContext'
+import { useBusiness } from '../contexts/BusinessContext'
 import { useLang } from '../contexts/LangContext'
 import type { Worker } from '../types'
 import { Plus, Trash2, UserCheck } from 'lucide-react'
+import { AuditLogViewer } from '../components/AuditLogViewer'
 
 export default function Settings() {
   const { profile, refreshProfile } = useAuth()
+  const { currentBusiness } = useBusiness()
   const { t } = useLang()
   const [shopName, setShopName] = useState('')
   const [fullName, setFullName] = useState('')
@@ -15,26 +18,37 @@ export default function Settings() {
   const [saving, setSaving] = useState(false)
   const [workerSaving, setWorkerSaving] = useState(false)
   const [success, setSuccess] = useState('')
+  const [errorMsg, setErrorMsg] = useState('')
+  const [workerError, setWorkerError] = useState('')
+  const [activeTab, setActiveTab] = useState<'general' | 'audit'>('general')
 
   useEffect(() => {
     if (profile) {
       setShopName(profile.shop_name)
       setFullName(profile.full_name)
-      loadWorkers()
     }
   }, [profile])
 
+  useEffect(() => {
+    if (currentBusiness?.id) {
+      loadWorkers()
+    } else {
+      setWorkers([])
+    }
+  }, [currentBusiness?.id])
+
   async function loadWorkers() {
-    if (!profile) return
+    if (!currentBusiness?.id) return
     const { data, error } = await supabase
       .from('workers')
       .select('*')
-      .eq('business_id', profile.business_id || profile.shop_id)
+      .eq('business_id', currentBusiness.id)
       .order('is_active', { ascending: false })
       .order('name')
 
     if (error) {
       console.error('Error loading workers:', error)
+      setWorkerError('Failed to load workers: ' + error.message)
       setWorkers([])
       return
     }
@@ -46,6 +60,7 @@ export default function Settings() {
     if (!profile) return
     setSaving(true)
     setSuccess('')
+    setErrorMsg('')
 
     const { error } = await supabase.from('profiles').update({
       shop_name: shopName,
@@ -56,17 +71,21 @@ export default function Settings() {
       await refreshProfile()
       setSuccess(t('success'))
       setTimeout(() => setSuccess(''), 3000)
+    } else {
+      console.error('Error saving profile:', error)
+      setErrorMsg('Failed to save settings: ' + error.message)
     }
     setSaving(false)
   }
 
   async function handleAddWorker(e: FormEvent) {
     e.preventDefault()
-    if (!profile || !workerForm.name.trim()) return
+    if (!currentBusiness?.id || !workerForm.name.trim()) return
     setWorkerSaving(true)
+    setWorkerError('')
 
     const { error } = await supabase.from('workers').insert({
-      business_id: profile.business_id || profile.shop_id,
+      business_id: currentBusiness.id,
       name: workerForm.name.trim(),
       phone: workerForm.phone.trim() || null,
       role: workerForm.role.trim() || 'seller',
@@ -78,35 +97,66 @@ export default function Settings() {
       setWorkerForm({ name: '', phone: '', role: 'seller' })
       loadWorkers()
     } else {
-      alert('Error saving worker: ' + error.message)
+      setWorkerError('Error saving worker: ' + error.message)
     }
   }
 
   async function toggleWorker(worker: Worker) {
+    setWorkerError('')
     const { error } = await supabase
       .from('workers')
       .update({ is_active: !worker.is_active })
       .eq('id', worker.id)
 
-    if (!error) loadWorkers()
+    if (!error) {
+      loadWorkers()
+    } else {
+      console.error('Error toggling worker:', error)
+      setWorkerError('Failed to update worker: ' + error.message)
+    }
   }
 
   async function deleteWorker(worker: Worker) {
     if (!confirm(t('confirm_delete'))) return
+    setWorkerError('')
     const { error } = await supabase.from('workers').delete().eq('id', worker.id)
-    if (!error) loadWorkers()
+    if (!error) {
+      loadWorkers()
+    } else {
+      console.error('Error deleting worker:', error)
+      setWorkerError('Failed to delete worker: ' + error.message)
+    }
   }
 
   return (
     <div className="settings-page">
       <div className="page-header">
         <h2>{t('settings')}</h2>
+        <div style={{ display: 'flex', gap: 8 }}>
+          <button
+            className={activeTab === 'general' ? 'btn btn-primary' : 'btn btn-ghost'}
+            onClick={() => setActiveTab('general')}
+          >
+            {t('settings')}
+          </button>
+          <button
+            className={activeTab === 'audit' ? 'btn btn-primary' : 'btn btn-ghost'}
+            onClick={() => setActiveTab('audit')}
+          >
+            Audit Log
+          </button>
+        </div>
       </div>
 
+      {activeTab === 'audit' ? (
+        <AuditLogViewer />
+      ) : (
+      <>
       <div className="settings-grid">
         <div className="card">
           <div className="card-title">{t('settings')}</div>
           {success && <div className="alert alert-success">{success}</div>}
+          {errorMsg && <div className="alert alert-error">{errorMsg}</div>}
 
           <form onSubmit={handleSave}>
             <div className="form-group">
@@ -132,6 +182,7 @@ export default function Settings() {
           <div className="card-title" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             <UserCheck size={16} />{t('workers_register')}
           </div>
+          {workerError && <div className="alert alert-error">{workerError}</div>}
 
           <form onSubmit={handleAddWorker}>
             <div className="form-group">
@@ -196,6 +247,8 @@ export default function Settings() {
           </table>
         </div>
       </div>
+      </>
+      )}
     </div>
   )
 }

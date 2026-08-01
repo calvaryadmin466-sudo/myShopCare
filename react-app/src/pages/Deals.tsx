@@ -2,8 +2,11 @@ import { useEffect, useState } from 'react'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../contexts/AuthContext'
 import { useLang } from '../contexts/LangContext'
+import { useBusiness } from '../contexts/BusinessContext'
 import type { Deal } from '../types'
 import { Plus, Tag, Trash2, X, Check, Calendar } from 'lucide-react'
+
+function todayStr() { return new Date().toISOString().slice(0, 10) }
 
 const DEAL_TYPES = [
   { v: 'percentage', l: 'percentage' },
@@ -51,43 +54,56 @@ function TableSkeleton({ cols }: { cols: number }) {
 export default function Deals() {
   const { profile } = useAuth()
   const { t } = useLang()
+  const { currentBusiness } = useBusiness()
   const [deals, setDeals] = useState<Deal[]>([])
   const [loading, setLoading] = useState(true)
   const [modal, setModal] = useState(false)
   const [form, setForm] = useState({ ...EMPTY })
   const [saving, setSaving] = useState(false)
+  const [formError, setFormError] = useState('')
 
-  useEffect(() => { if (profile) load() }, [profile])
+  useEffect(() => { if (profile && currentBusiness) load() }, [profile, currentBusiness])
 
   async function load() {
-    const { data } = await supabase.from('deals').select('*').eq('shop_id', profile!.shop_id).order('created_at', { ascending: false })
+    if (!currentBusiness) return
+    const { data, error } = await supabase.from('deals').select('*').eq('business_id', currentBusiness.id).order('created_at', { ascending: false })
+    if (error) console.error('Error loading deals:', error)
     setDeals(data as Deal[] || [])
     setLoading(false)
   }
 
   async function save() {
+    setFormError('')
     if (!form.name || !form.start_date || !form.end_date) return
+    if (form.end_date < form.start_date) { setFormError(t('deal_end_before_start') || 'End date must be after start date.'); return }
+    const discountValue = +form.discount_value
+    if (!discountValue || discountValue <= 0) { setFormError(t('deal_discount_invalid') || 'Discount value must be greater than 0.'); return }
+    if (form.deal_type === 'percentage' && discountValue > 100) { setFormError(t('deal_discount_invalid') || 'Percentage discount cannot exceed 100.'); return }
+    if (!currentBusiness) return
     setSaving(true)
-    await supabase.from('deals').insert({
+    const { error } = await supabase.from('deals').insert({
       ...form,
-      discount_value: +form.discount_value,
+      discount_value: discountValue,
       min_purchase: form.min_purchase ? +form.min_purchase : null,
-      shop_id: profile!.shop_id
+      business_id: currentBusiness.id,
     })
     setSaving(false)
+    if (error) { setFormError(error.message); return }
     setModal(false)
     setForm({ ...EMPTY })
     load()
   }
 
   async function toggleActive(id: string, active: boolean) {
-    await supabase.from('deals').update({ is_active: !active }).eq('id', id)
+    const { error } = await supabase.from('deals').update({ is_active: !active }).eq('id', id)
+    if (error) { alert('Failed to update deal: ' + error.message); return }
     load()
   }
 
   async function deleteDeal(id: string) {
     if (!confirm(t('confirm_delete'))) return
-    await supabase.from('deals').delete().eq('id', id)
+    const { error } = await supabase.from('deals').delete().eq('id', id)
+    if (error) { alert('Failed to delete deal: ' + error.message); return }
     load()
   }
 
@@ -95,7 +111,7 @@ export default function Deals() {
     <div>
       <div className="page-header">
         <h2>🏷️ {t('deals')}</h2>
-        <button className="btn btn-primary" onClick={() => setModal(true)}><Plus size={16} />{t('add_deal')}</button>
+        <button className="btn btn-primary" onClick={() => { setForm({ ...EMPTY }); setFormError(''); setModal(true) }}><Plus size={16} />{t('add_deal')}</button>
       </div>
 
       {loading ? <TableSkeleton cols={8} /> : (
@@ -118,7 +134,7 @@ export default function Deals() {
                 {deals.length === 0 ? (
                   <tr><td colSpan={8}><div className="empty-state"><Tag /><p>{t('no_data')}</p></div></td></tr>
                 ) : deals.map(d => {
-                  const expired = new Date(d.end_date) < new Date()
+                  const expired = d.end_date < todayStr()
                   return (
                     <tr key={d.id} style={{ opacity: expired || !d.is_active ? 0.6 : 1 }}>
                       <td>
@@ -162,6 +178,7 @@ export default function Deals() {
               <button className="btn btn-ghost btn-sm" onClick={() => setModal(false)}><X size={16} /></button>
             </div>
             <div className="modal-body">
+              {formError && <div className="alert alert-error">{formError}</div>}
               <div className="form-group">
                 <label>{t('deal_name')} *</label>
                 <input value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} placeholder="e.g. Krismasi Punguzo" />
@@ -179,7 +196,7 @@ export default function Deals() {
                 </div>
                 <div className="form-group">
                   <label>{t('discount_value')} * ({form.deal_type === 'percentage' ? '%' : 'TZS'})</label>
-                  <input type="number" value={form.discount_value || ''} onChange={e => setForm(f => ({ ...f, discount_value: +e.target.value }))} />
+                  <input type="number" min="0" max={form.deal_type === 'percentage' ? 100 : undefined} value={form.discount_value || ''} onChange={e => setForm(f => ({ ...f, discount_value: Math.max(0, +e.target.value || 0) }))} />
                 </div>
               </div>
               <div className="form-grid">

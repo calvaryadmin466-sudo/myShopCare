@@ -3,6 +3,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../contexts/AuthContext'
 import { useLang } from '../contexts/LangContext'
+import { useBusiness } from '../contexts/BusinessContext'
 import type { Sale, SaleItem } from '../types'
 import { BarChart3, Calendar, Download, Eye, FileText, Printer, Search, X } from 'lucide-react'
 import * as XLSX from 'xlsx'
@@ -72,12 +73,14 @@ function TableSkeleton() {
 
 export default function SalesHistory() {
   const { profile } = useAuth()
+  const { currentBusiness } = useBusiness()
   const { t } = useLang()
   const navigate = useNavigate()
   const [searchParams] = useSearchParams()
   const [sales, setSales] = useState<SaleWithItems[]>([])
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
+  const [debouncedSearch, setDebouncedSearch] = useState('')
   const [invoiceSearch, setInvoiceSearch] = useState('')
   const [dateFilter, setDateFilter] = useState<DateFilter>((searchParams.get('filter') as DateFilter) || 'today')
   const [paymentMethodFilter, setPaymentMethodFilter] = useState<PaymentMethodFilter>('all')
@@ -85,17 +88,30 @@ export default function SalesHistory() {
   const [selected, setSelected] = useState<SaleWithItems | null>(null)
   const [currentPage, setCurrentPage] = useState(1)
   const [totalCount, setTotalCount] = useState(0)
+  // Aggregate stats computed across ALL rows matching the current filters,
+  // not just the current page — previously the stat cards summed only the
+  // 25 rows on screen, which understated (or misrepresented) totals for any
+  // filter matching more than one page of results.
+  const [stats, setStats] = useState({ totalRevenue: 0, totalPaid: 0, totalItems: 0, totalGrossProfit: 0, matchCount: 0 })
   const pageSize = 25
 
-  useEffect(() => { if (profile) load() }, [profile, dateFilter, paymentMethodFilter, paymentStatusFilter, currentPage])
+  // Debounce the free-text search box so it doesn't fire a query per keystroke.
+  useEffect(() => {
+    const id = window.setTimeout(() => setDebouncedSearch(search), 300)
+    return () => window.clearTimeout(id)
+  }, [search])
+
+  useEffect(() => { setCurrentPage(1) }, [debouncedSearch, dateFilter, paymentMethodFilter, paymentStatusFilter])
 
   useEffect(() => {
+    if (!profile || !currentBusiness) return
     if (invoiceSearch) {
       searchByInvoice(invoiceSearch)
     } else {
       load()
+      loadStats()
     }
-  }, [invoiceSearch])
+  }, [profile, currentBusiness, invoiceSearch, dateFilter, paymentMethodFilter, paymentStatusFilter, currentPage, debouncedSearch])
 
   function filterStartDate() {
     if (dateFilter === 'all') return null
@@ -115,25 +131,54 @@ export default function SalesHistory() {
     navigate(`/reports?period=${periodMap[dateFilter]}`)
   }
 
+  // Resolves the free-text search term to a set of sale ids that match by
+  // product name (product name lives on the joined sale_items table, which
+  // PostgREST can't OR against a parent-table filter directly).
+  async function matchingSaleIdsByItemName(term: string, businessId: string): Promise<string[]> {
+    const { data, error } = await supabase
+      .from('sale_items')
+      .select('sale_id, sales!inner(business_id)')
+      .eq('sales.business_id', businessId)
+      .ilike('product_name', `%${term}%`)
+      .limit(1000)
+    if (error) { console.error('Error searching sale items:', error); return [] }
+    return Array.from(new Set((data || []).map((r: any) => r.sale_id as string)))
+  }
+
+  // Resolves the filter state into plain data (not a query builder — mixing
+  // Supabase's thenable query builders through a generic async helper trips
+  // up TS's Awaited<> unwrapping) that both load() and loadStats() apply
+  // identically, so the two queries always agree on what "matches".
+  async function resolveFilters(businessId: string, term: string) {
+    const fromDate = filterStartDate()
+    const itemIds = term ? await matchingSaleIdsByItemName(term, businessId) : []
+    return { fromDate, itemIds }
+  }
+
   async function load() {
-    if (!profile) return
+    if (!currentBusiness) return
     setLoading(true)
 
     const from = (currentPage - 1) * pageSize
     const to = from + pageSize - 1
+    const businessId = currentBusiness.id
+    const term = debouncedSearch.trim()
+    const { fromDate, itemIds } = await resolveFilters(businessId, term)
 
     let query = supabase
       .from('sales')
       .select('*, sale_items(*)', { count: 'exact' })
-      .eq('business_id', profile.business_id || profile.shop_id)
+      .eq('business_id', businessId)
       .order('created_at', { ascending: false })
-      .range(from, to)
 
-    const fromDate = filterStartDate()
     if (fromDate) query = query.gte('created_at', fromDate)
-
     if (paymentMethodFilter !== 'all') query = query.eq('payment_method', paymentMethodFilter)
     if (paymentStatusFilter !== 'all') query = query.eq('payment_status', paymentStatusFilter)
+    if (term) {
+      const idClause = itemIds.length > 0 ? `,id.in.(${itemIds.join(',')})` : ''
+      query = query.or(`customer_name.ilike.%${term}%,customer_phone.ilike.%${term}%,id.ilike.%${term}%${idClause}`)
+    }
+    query = query.range(from, to)
 
     const { data, error, count } = await query
     if (error) {
@@ -147,14 +192,48 @@ export default function SalesHistory() {
     setLoading(false)
   }
 
+  // Fetches every row matching the current filters (unpaginated, minimal
+  // columns) purely to compute accurate stat-card totals. Capped at 5000
+  // rows — consistent with the cap used elsewhere in this app's reporting
+  // (e.g. Reports.tsx) — to avoid an unbounded query on very large datasets.
+  async function loadStats() {
+    if (!currentBusiness) return
+    const businessId = currentBusiness.id
+    const term = debouncedSearch.trim()
+    const { fromDate, itemIds } = await resolveFilters(businessId, term)
+
+    let query = supabase
+      .from('sales')
+      .select('total, amount_paid, sale_items(quantity, total_cost)')
+      .eq('business_id', businessId)
+      .limit(5000)
+
+    if (fromDate) query = query.gte('created_at', fromDate)
+    if (paymentMethodFilter !== 'all') query = query.eq('payment_method', paymentMethodFilter)
+    if (paymentStatusFilter !== 'all') query = query.eq('payment_status', paymentStatusFilter)
+    if (term) {
+      const idClause = itemIds.length > 0 ? `,id.in.(${itemIds.join(',')})` : ''
+      query = query.or(`customer_name.ilike.%${term}%,customer_phone.ilike.%${term}%,id.ilike.%${term}%${idClause}`)
+    }
+
+    const { data, error } = await query
+    if (error) { console.error('Error loading sales stats:', error); return }
+    const rows = (data as any[]) || []
+    const totalRevenue = rows.reduce((sum, s) => sum + Number(s.total), 0)
+    const totalPaid = rows.reduce((sum, s) => sum + Number(s.amount_paid), 0)
+    const totalItems = rows.reduce((sum, s) => sum + (s.sale_items || []).reduce((n: number, i: any) => n + Number(i.quantity), 0), 0)
+    const totalCOGS = rows.reduce((sum, s) => sum + (s.sale_items || []).reduce((n: number, i: any) => n + Number(i.total_cost || 0), 0), 0)
+    setStats({ totalRevenue, totalPaid, totalItems, totalGrossProfit: totalRevenue - totalCOGS, matchCount: rows.length })
+  }
+
   async function searchByInvoice(invoiceId: string) {
-    if (!profile || !invoiceId.trim()) return
+    if (!currentBusiness || !invoiceId.trim()) return
     setLoading(true)
 
     const { data, error } = await supabase
       .from('sales')
       .select('*, sale_items(*)')
-      .eq('business_id', profile.business_id || profile.shop_id)
+      .eq('business_id', currentBusiness.id)
       .or(`id.eq.${invoiceId},id.ilike.${invoiceId}%`)
       .limit(1)
 
@@ -171,21 +250,14 @@ export default function SalesHistory() {
     setLoading(false)
   }
 
-  const filtered = sales.filter(s => {
-    if (invoiceSearch) return true // Already filtered by invoice search
-    const term = search.toLowerCase()
-    const customer = s.customer_name?.toLowerCase() || ''
-    const phone = s.customer_phone?.toLowerCase() || ''
-    const items = (s.items || []).map(i => i.product_name.toLowerCase()).join(' ')
-    const invoiceId = s.id.toLowerCase()
-    return customer.includes(term) || phone.includes(term) || items.includes(term) || invoiceId.includes(term)
-  })
+  // The current page's rows, shown as-is — filtering/search now happens
+  // server-side (see load()/applyCommonFilters), so this is just the display list.
+  const filtered = sales
 
-  const totalRevenue = filtered.reduce((sum, s) => sum + Number(s.total), 0)
-  const totalPaid = filtered.reduce((sum, s) => sum + Number(s.amount_paid), 0)
-  const totalItems = filtered.reduce((sum, s) => sum + (s.items || []).reduce((n, i) => n + Number(i.quantity), 0), 0)
-  const totalCOGS = filtered.reduce((sum, s) => sum + (s.items || []).reduce((n, i) => n + Number(i.total_cost || 0), 0), 0)
-  const totalGrossProfit = totalRevenue - totalCOGS
+  const totalRevenue = stats.totalRevenue
+  const totalPaid = stats.totalPaid
+  const totalItems = stats.totalItems
+  const totalGrossProfit = stats.totalGrossProfit
 
   const dateFilters: DateFilter[] = ['today', 'week', 'month', 'all']
   const paymentMethods: PaymentMethodFilter[] = ['all', 'cash', 'mobile_money', 'card', 'credit']
@@ -234,7 +306,7 @@ export default function SalesHistory() {
     `).join('')
     printWindow.document.write(`<!doctype html><html><head><title>${escapeHtml(t('sale_details'))}</title><style>
       body { font-family: Arial, sans-serif; color: #1f2937; margin: 32px; } h1 { font-size: 22px; margin: 0 0 8px; } p { margin: 4px 0; color: #4b5563; } table { width: 100%; border-collapse: collapse; margin: 24px 0 16px; } th, td { padding: 9px; border-bottom: 1px solid #e5e7eb; text-align: left; } th { background: #f9fafb; } td:not(:first-child), th:not(:first-child) { text-align: right; } .totals { margin-left: auto; width: 280px; } .total { font-size: 18px; font-weight: 700; border-top: 2px solid #111827; padding-top: 8px; margin-top: 8px; } @media print { body { margin: 16px; } }
-    </style></head><body><h1>${escapeHtml(profile?.shop_name || 'myShopCare')}</h1><h2>${escapeHtml(t('sale_details'))}</h2>
+    </style></head><body><h1>${escapeHtml(currentBusiness?.name || profile?.shop_name || 'myShopCare')}</h1><h2>${escapeHtml(t('sale_details'))}</h2>
       <p>${escapeHtml(t('date'))}: ${escapeHtml(new Date(sale.created_at).toLocaleString('sw-TZ'))}</p>
       <p>${escapeHtml(t('sold_by'))}: ${escapeHtml(sale.cashier_name || t('unknown_seller'))}</p>
       <p>${escapeHtml(t('customer'))}: ${escapeHtml(sale.customer_name || t('walk_in_customer'))}</p>
@@ -259,7 +331,7 @@ export default function SalesHistory() {
       <div className="stats-grid">
         <div className="stat-card">
           <div className="stat-label">{t('transactions')}</div>
-          <div className="stat-value" style={{ color: 'var(--accent)' }}>{fmt(filtered.length)}</div>
+          <div className="stat-value" style={{ color: 'var(--accent)' }}>{fmt(stats.matchCount)}</div>
           <div className="stat-sub">{t('sales_history')}</div>
         </div>
         <div className="stat-card">

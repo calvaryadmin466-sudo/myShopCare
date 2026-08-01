@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { Outlet, NavLink, useNavigate } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
 import { useLang } from '../contexts/LangContext'
@@ -21,6 +21,7 @@ export default function Layout() {
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [businessDropdownOpen, setBusinessDropdownOpen] = useState(false)
   const [isOnline, setIsOnline] = useState(true)
+  const businessDropdownRef = useRef<HTMLDivElement>(null)
 
   async function handleLogout() {
     await signOut()
@@ -36,9 +37,20 @@ export default function Layout() {
     { to: '/expenses', icon: <Receipt />, label: t('expenses') },
     { to: '/debts', icon: <CreditCard />, label: t('debts') },
     { to: '/deals', icon: <Tag />, label: t('deals') },
-    { to: '/businesses', icon: <Building2 />, label: 'Businesses' },
+    { to: '/businesses', icon: <Building2 />, label: t('businesses') },
     { to: '/settings', icon: <Settings />, label: t('settings') },
   ]
+
+  // Click-outside closes the business selector dropdown
+  useEffect(() => {
+    function handleClick(e: MouseEvent) {
+      if (businessDropdownRef.current && !businessDropdownRef.current.contains(e.target as Node)) {
+        setBusinessDropdownOpen(false)
+      }
+    }
+    document.addEventListener('mousedown', handleClick)
+    return () => document.removeEventListener('mousedown', handleClick)
+  }, [])
 
   // Monitor online status
   useEffect(() => {
@@ -90,7 +102,7 @@ export default function Layout() {
         <div className="sidebar-bottom">
           {/* Business Selector */}
           {businesses.length > 0 && (
-            <div className="business-selector">
+            <div className="business-selector" ref={businessDropdownRef}>
               <button
                 className="business-selector-btn"
                 onClick={() => setBusinessDropdownOpen(!businessDropdownOpen)}

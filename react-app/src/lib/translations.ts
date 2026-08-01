@@ -11,6 +11,7 @@ export const translations: Record<'en' | 'sw', Translations> = {
     expenses: 'Expenses',
     debts: 'Debts',
     deals: 'Deals',
+    businesses: 'Businesses',
     settings: 'Settings',
     logout: 'Logout',
 
@@ -163,6 +164,15 @@ export const translations: Record<'en' | 'sw', Translations> = {
     date: 'Date',
     notes: 'Notes',
     shillings: 'TZS',
+    error_loading_dashboard: 'Failed to load dashboard',
+    retry: 'Retry',
+    manual_debt_repayment: 'Debt repayment',
+    debt_requires_customer_name: "Please enter a customer name — this sale is not fully paid and needs to be tracked as a debt.",
+    insufficient_stock_error: 'Not enough stock for one or more items. Please refresh and try again.',
+    payment_amount_invalid: 'Enter a valid payment amount.',
+    payment_exceeds_balance: 'Payment cannot exceed the remaining balance.',
+    deal_end_before_start: 'End date must be after start date.',
+    deal_discount_invalid: 'Enter a valid discount value.',
 
     // Reports / P&L
     profit_loss: 'Profit & Loss',
@@ -179,6 +189,7 @@ export const translations: Record<'en' | 'sw', Translations> = {
     cogs: 'COGS',
     cost_of_sales: 'Cost of Sales',
     gross_profit: 'Gross Profit',
+    profit: 'Profit',
     period: 'Period',
     net_profit: 'Net Profit',
     all: 'All',
@@ -215,6 +226,7 @@ export const translations: Record<'en' | 'sw', Translations> = {
     expenses: 'Matumizi',
     debts: 'Madeni',
     deals: 'Ofa',
+    businesses: 'Biashara',
     settings: 'Mipangilio',
     logout: 'Toka',
 
@@ -367,6 +379,15 @@ export const translations: Record<'en' | 'sw', Translations> = {
     date: 'Tarehe',
     notes: 'Maelezo',
     shillings: 'TZS',
+    error_loading_dashboard: 'Imeshindwa kupakia dashibodi',
+    retry: 'Jaribu tena',
+    manual_debt_repayment: 'Malipo ya deni',
+    debt_requires_customer_name: 'Tafadhali weka jina la mteja — mauzo haya hayajalipwa kikamilifu na yanahitaji kufuatiliwa kama deni.',
+    insufficient_stock_error: 'Bidhaa haitoshi kwa baadhi ya vitu. Tafadhali onyesha upya na jaribu tena.',
+    payment_amount_invalid: 'Weka kiasi sahihi cha malipo.',
+    payment_exceeds_balance: 'Malipo hayawezi kuzidi salio lililobaki.',
+    deal_end_before_start: 'Tarehe ya mwisho lazima iwe baada ya tarehe ya kuanza.',
+    deal_discount_invalid: 'Weka kiwango sahihi cha punguzo.',
 
     // Reports / P&L
     profit_loss: 'Faida na Hasara',
@@ -383,6 +404,7 @@ export const translations: Record<'en' | 'sw', Translations> = {
     cogs: 'Gharama za Mauzo (COGS)',
     cost_of_sales: 'Gharama ya Bidhaa Zilizouzwa',
     gross_profit: 'Faida Ghafi',
+    profit: 'Faida',
     period: 'Kipindi',
     net_profit: 'Faida Safi',
     all: 'Zote',

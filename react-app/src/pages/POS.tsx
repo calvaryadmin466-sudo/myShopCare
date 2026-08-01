@@ -1,13 +1,20 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../contexts/AuthContext'
 import { useLang } from '../contexts/LangContext'
 import { useBusiness } from '../contexts/BusinessContext'
 import { systemNotifications } from '../lib/systemNotifications'
-import type { Product, CartItem, Sale, Worker } from '../types'
+import type { Product, CartItem, Sale, Worker, Deal } from '../types'
 import { Search, Trash2, X, Printer, ShoppingCart as CartIcon, Package } from 'lucide-react'
 
 function fmt(n: number) { return new Intl.NumberFormat().format(Math.round(n)) }
+
+function todayStr() { return new Date().toISOString().slice(0, 10) }
+
+function isDealActive(d: Deal) {
+  const today = todayStr()
+  return d.is_active && d.start_date <= today && d.end_date >= today
+}
 
 function GridSkeleton() {
   return (
@@ -28,8 +35,10 @@ function GridSkeleton() {
 export default function POS() {
   const { profile, user } = useAuth()
   const { t } = useLang()
+  const { currentBusiness } = useBusiness()
   const [products, setProducts] = useState<Product[]>([])
   const [workers, setWorkers] = useState<Worker[]>([])
+  const [deals, setDeals] = useState<Deal[]>([])
   const [cart, setCart] = useState<CartItem[]>([])
   const [search, setSearch] = useState('')
   const [catFilter, setCatFilter] = useState('all')
@@ -41,16 +50,21 @@ export default function POS() {
   const [customer, setCustomer] = useState({ name: '', phone: '' })
   const [payment, setPayment] = useState({ method: 'cash', amount_paid: 0, discount: 0 })
 
-  useEffect(() => { if (profile) load() }, [profile])
+  useEffect(() => { if (profile && currentBusiness) load() }, [profile, currentBusiness])
 
   async function load() {
-    const [productsRes, workersRes] = await Promise.all([
-      supabase.from('products').select('*').eq('business_id', profile!.business_id || profile!.shop_id).gt('stock_quantity', 0).order('name'),
-      supabase.from('workers').select('*').eq('business_id', profile!.business_id || profile!.shop_id).eq('is_active', true).order('name'),
+    if (!currentBusiness) return
+    const businessId = currentBusiness.id
+    const today = todayStr()
+    const [productsRes, workersRes, dealsRes] = await Promise.all([
+      supabase.from('products').select('*').eq('business_id', businessId).gt('stock_quantity', 0).order('name'),
+      supabase.from('workers').select('*').eq('business_id', businessId).eq('is_active', true).order('name'),
+      supabase.from('deals').select('*').eq('business_id', businessId).eq('is_active', true).lte('start_date', today).gte('end_date', today),
     ])
     const activeWorkers = workersRes.data as Worker[] || []
     setProducts(productsRes.data as Product[] || [])
     setWorkers(activeWorkers)
+    setDeals(dealsRes.data as Deal[] || [])
     setSellerId(prev => prev !== 'profile' || activeWorkers.length === 0 ? prev : activeWorkers[0].id)
     setLoading(false)
   }
@@ -73,38 +87,52 @@ export default function POS() {
   function removeItem(id: string) { setCart(prev => prev.filter(c => c.id !== id)) }
 
   const subtotal = cart.reduce((s, c) => s + c.selling_price * c.qty, 0)
-  const discount = Math.min(+payment.discount || 0, subtotal)
-  const total = subtotal - discount
+  const manualDiscount = Math.min(Math.max(+payment.discount || 0, 0), subtotal)
+
+  // Auto-apply the single best-value active percentage/fixed deal. BOGO and
+  // bundle deals aren't priced automatically — the schema has no defined
+  // pairing/bundling rules to compute them from.
+  const eligibleDeal = useMemo(() => {
+    if (cart.length === 0) return null
+    let best: { deal: Deal; amount: number } | null = null
+    for (const d of deals) {
+      if (!isDealActive(d)) continue
+      if (d.deal_type !== 'percentage' && d.deal_type !== 'fixed') continue
+      const applicable = !d.applicable_products || d.applicable_products.length === 0
+        ? cart
+        : cart.filter(c => d.applicable_products!.includes(c.id))
+      if (applicable.length === 0) continue
+      const eligibleSubtotal = applicable.reduce((s, c) => s + c.selling_price * c.qty, 0)
+      if (eligibleSubtotal < (d.min_purchase || 0)) continue
+      const amount = d.deal_type === 'percentage'
+        ? eligibleSubtotal * (d.discount_value / 100)
+        : Math.min(d.discount_value, eligibleSubtotal)
+      if (amount > 0 && (!best || amount > best.amount)) best = { deal: d, amount }
+    }
+    return best
+  }, [cart, deals])
+
+  const dealDiscount = eligibleDeal ? Math.min(eligibleDeal.amount, Math.max(0, subtotal - manualDiscount)) : 0
+  const discount = manualDiscount + dealDiscount
+  const total = Math.max(0, subtotal - discount)
   const change = Math.max(0, (+payment.amount_paid || 0) - total)
   const selectedWorker = workers.find(w => w.id === sellerId)
   const sellerName = selectedWorker?.name || profile?.full_name || ''
 
   async function processSale() {
-    if (cart.length === 0) return
-    setProcessing(true)
+    if (cart.length === 0 || !currentBusiness) return
 
-    const saleData = {
-      business_id: profile!.business_id || profile!.shop_id,
-      cashier_id: user!.id,
-      cashier_worker_id: selectedWorker?.id || null,
-      cashier_name: sellerName,
-      customer_name: customer.name || null,
-      customer_phone: customer.phone || null,
-      subtotal,
-      discount,
-      total,
-      payment_method: payment.method,
-      payment_status: payment.method === 'credit' ? 'pending' : (+payment.amount_paid >= total ? 'paid' : 'partial'),
-      amount_paid: payment.method === 'credit' ? 0 : (+payment.amount_paid || total),
-      change_given: payment.method === 'credit' ? 0 : change,
+    const amountPaidValue = payment.method === 'credit' ? 0 : (+payment.amount_paid > 0 ? +payment.amount_paid : total)
+    const paymentStatus: Sale['payment_status'] = payment.method === 'credit' ? 'pending' : (amountPaidValue >= total ? 'paid' : 'partial')
+
+    if (paymentStatus !== 'paid' && !customer.name.trim()) {
+      alert(t('debt_requires_customer_name') || 'Please enter a customer name — this sale is not fully paid and needs to be tracked as a debt.')
+      return
     }
 
-    const { data: sale, error } = await supabase.from('sales').insert(saleData).select().single()
-    if (error || !sale) { setProcessing(false); alert('Error processing sale: ' + (error?.message || 'Unknown error')); return }
+    setProcessing(true)
 
-    // Insert sale items
     const items = cart.map(c => ({
-      sale_id: sale.id,
       product_id: c.id,
       product_name: c.name,
       quantity: c.qty,
@@ -113,43 +141,51 @@ export default function POS() {
       unit_cost: c.buying_price,
       total_cost: c.buying_price * c.qty,
     }))
-    const { error: itemsError } = await supabase.from('sale_items').insert(items)
-    if (itemsError) {
-      console.error('Error inserting sale items:', itemsError)
-      alert('Sale recorded, but failed to save items. Please check database.')
+
+    // Single atomic RPC: inserts the sale + items, decrements stock with a
+    // guarded UPDATE (prevents overselling from concurrent checkouts), and
+    // records a debt for any non-fully-paid sale — all in one DB transaction
+    // so a failure (e.g. insufficient stock) rolls back everything instead of
+    // leaving a half-recorded sale.
+    const { data, error } = await supabase.rpc('process_sale', {
+      p_business_id: currentBusiness.id,
+      p_cashier_id: user!.id,
+      p_cashier_worker_id: selectedWorker?.id || null,
+      p_cashier_name: sellerName,
+      p_customer_name: customer.name || null,
+      p_customer_phone: customer.phone || null,
+      p_subtotal: subtotal,
+      p_discount: discount,
+      p_total: total,
+      p_payment_method: payment.method,
+      p_payment_status: paymentStatus,
+      p_amount_paid: amountPaidValue,
+      p_change_given: payment.method === 'credit' ? 0 : change,
+      p_items: items,
+    })
+
+    const sale = Array.isArray(data) ? data[0] : data
+    if (error || !sale) {
+      setProcessing(false)
+      const msg = error?.message?.includes('insufficient_stock')
+        ? (t('insufficient_stock_error') || 'Not enough stock for one or more items. Please refresh and try again.')
+        : (error?.message || 'Unknown error')
+      alert('Error processing sale: ' + msg)
+      return
     }
 
-    // Update stock
-    for (const c of cart) {
-      const { error: stockError } = await supabase.from('products').update({ stock_quantity: c.stock_quantity - c.qty }).eq('id', c.id)
-      if (stockError) console.error('Error updating stock:', stockError)
+    if (eligibleDeal) {
+      const { error: dealErr } = await supabase.from('deals').update({ usage_count: (eligibleDeal.deal.usage_count || 0) + 1 }).eq('id', eligibleDeal.deal.id)
+      if (dealErr) console.error('Error updating deal usage:', dealErr)
     }
 
-    // If credit, create debt
-    if (payment.method === 'credit' && customer.name) {
-      const { error: debtError } = await supabase.from('debts').insert({
-        business_id: profile!.business_id || profile!.shop_id,
-        customer_name: customer.name,
-        customer_phone: customer.phone || null,
-        original_amount: total,
-        amount_paid: 0,
-        sale_id: sale.id,
-      })
-      if (debtError) {
-        console.error('Error creating debt:', debtError)
-        alert('Failed to record customer debt.')
-      }
-    }
-
-    setReceipt({ ...sale, items })
+    setReceipt({ ...sale, items: items.map((it, i) => ({ ...it, id: `${sale.id}-${i}`, sale_id: sale.id })) })
     setCart([])
     setCustomer({ name: '', phone: '' })
     setPayment({ method: 'cash', amount_paid: 0, discount: 0 })
-    
-    // Show system notification for sale
-    const currency = profile?.business_id ? 'TZS' : 'USD'
-    systemNotifications.showSaleNotification(total, currency)
-    
+
+    systemNotifications.showSaleNotification(total, currentBusiness.currency || 'TZS')
+
     load()
     setProcessing(false)
   }
@@ -277,9 +313,14 @@ export default function POS() {
             <div className="summary-row"><span>{t('subtotal')}</span><span>{fmt(subtotal)} TZS</span></div>
             <div style={{ display: 'flex', gap: 8, alignItems: 'center', margin: '6px 0' }}>
               <span style={{ fontSize: '0.8rem', color: 'var(--text2)', minWidth: 60 }}>{t('discount')}</span>
-              <input type="number" min="0" value={payment.discount || ''} onChange={e => setPayment(p => ({ ...p, discount: +e.target.value }))}
+              <input type="number" min="0" value={payment.discount || ''} onChange={e => setPayment(p => ({ ...p, discount: Math.max(0, +e.target.value || 0) }))}
                 style={{ flex: 1, background: 'var(--bg3)', border: '1px solid var(--border)', borderRadius: 6, color: 'var(--text)', padding: '4px 8px', fontSize: '0.82rem' }} placeholder="0" />
             </div>
+            {eligibleDeal && (
+              <div className="summary-row" style={{ color: 'var(--green)' }}>
+                <span>🏷️ {eligibleDeal.deal.name}</span><span>-{fmt(dealDiscount)} TZS</span>
+              </div>
+            )}
             <div className="summary-row total"><span>{t('total')}</span><span style={{ color: 'var(--accent)' }}>{fmt(total)} TZS</span></div>
 
             <div style={{ margin: '10px 0' }}>
@@ -297,7 +338,7 @@ export default function POS() {
               <>
                 <div className="form-group" style={{ marginBottom: 8 }}>
                   <label style={{ fontSize: '0.78rem' }}>{t('amount_paid')} (TZS)</label>
-                  <input type="number" min="0" value={payment.amount_paid || ''} onChange={e => setPayment(p => ({ ...p, amount_paid: +e.target.value }))}
+                  <input type="number" min="0" value={payment.amount_paid || ''} onChange={e => setPayment(p => ({ ...p, amount_paid: Math.max(0, +e.target.value || 0) }))}
                     placeholder={fmt(total)} />
                 </div>
                 {payment.amount_paid > 0 && (
@@ -309,17 +350,17 @@ export default function POS() {
             )}
 
             <div style={{ marginTop: 16, padding: '12px 0', borderTop: '1px solid var(--border)', position: 'relative', zIndex: 1000 }}>
-              <button 
+              <button
                 type="button"
-                className="btn btn-primary btn-full btn-lg" 
-                style={{ 
-                  display: 'flex', 
-                  alignItems: 'center', 
-                  justifyContent: 'center', 
-                  width: '100%', 
-                  height: '56px', 
-                  fontSize: '1.1rem', 
-                  fontWeight: 700, 
+                className="btn btn-primary btn-full btn-lg"
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  width: '100%',
+                  height: '56px',
+                  fontSize: '1.1rem',
+                  fontWeight: 700,
                   padding: '14px 24px',
                   visibility: 'visible',
                   opacity: 1,
@@ -331,8 +372,8 @@ export default function POS() {
                   position: 'relative',
                   zIndex: 1000,
                   boxShadow: '0 4px 12px rgba(0,0,0,0.15)'
-                }} 
-                onClick={processSale} 
+                }}
+                onClick={processSale}
                 disabled={cart.length === 0 || processing}
               >
                 {processing ? t('loading') : `✓ ${t('process_sale')}`}
@@ -352,7 +393,7 @@ export default function POS() {
             </div>
             <div className="modal-body receipt-body">
               <div className="receipt-header">
-                <h2>{profile?.shop_name}</h2>
+                <h2>{currentBusiness?.name || profile?.shop_name}</h2>
                 <p>{t('receipt_no')} {receipt.id.slice(0, 8).toUpperCase()}</p>
                 <p>{new Date(receipt.created_at || Date.now()).toLocaleString('sw-TZ')}</p>
                 <p>{t('sold_by')}: {receipt.cashier_name}</p>

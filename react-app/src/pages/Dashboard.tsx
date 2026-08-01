@@ -2,7 +2,7 @@ import { useEffect, useState, useRef } from 'react'
 import { Link } from 'react-router-dom'
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts'
 import { supabase } from '../lib/supabase'
-import { useAuth } from '../contexts/AuthContext'
+import { useBusiness } from '../contexts/BusinessContext'
 import { useLang } from '../contexts/LangContext'
 import { ShoppingCart, Package, AlertTriangle, TrendingUp, Users, History, CreditCard, Tag } from 'lucide-react'
 
@@ -37,62 +37,50 @@ function fmt(n: number) {
 }
 
 export default function Dashboard() {
-  const { profile } = useAuth()
+  const { currentBusiness, loading: businessLoading } = useBusiness()
   const { t } = useLang()
   const [stats, setStats] = useState<Stats | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const abortControllerRef = useRef<AbortController | null>(null)
 
-  console.log('Dashboard render - profile:', profile)
+  useEffect(() => {
+    // Wait for the business context to finish resolving before deciding what to do
+    if (businessLoading) return
 
-  useEffect(() => { 
-    console.log('Dashboard useEffect - profile?.id:', profile?.id, 'profile:', profile)
-    if (profile?.id) {
-      console.log('Dashboard: Calling loadStats')
+    if (currentBusiness?.id) {
       loadStats()
-      
-      // Set up real-time subscription for sales
-      const businessId = profile.business_id || profile.shop_id
-      if (businessId) {
-        const subscription = supabase
-          .channel('dashboard-sales-updates')
-          .on('postgres_changes', {
-            event: 'INSERT',
-            schema: 'public',
-            table: 'sales',
-            filter: `business_id=eq.${businessId}`
-          }, () => {
-            console.log('Dashboard: New sale detected, refreshing stats')
-            loadStats()
-          })
-          .subscribe()
-        
-        return () => {
-          abortControllerRef.current?.abort()
-          subscription.unsubscribe()
-        }
+
+      // Set up real-time subscription for sales, scoped to the selected business
+      const businessId = currentBusiness.id
+      const subscription = supabase
+        .channel('dashboard-sales-updates')
+        .on('postgres_changes', {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'sales',
+          filter: `business_id=eq.${businessId}`
+        }, () => {
+          loadStats()
+        })
+        .subscribe()
+
+      return () => {
+        abortControllerRef.current?.abort()
+        subscription.unsubscribe()
       }
     } else {
-      console.log('Dashboard: No profile.id, skipping loadStats')
-      // If profile exists but has no id, or profile is null after auth loading completes
-      if (profile === null) {
-        console.log('Dashboard: Profile is null, might not be loaded yet')
-      } else {
-        console.log('Dashboard: Profile exists but no id, setting loading false')
-        setLoading(false)
-        setError('Profile data is incomplete. Please contact support.')
-      }
+      // No business selected/available for this user
+      setLoading(false)
     }
     return () => {
       abortControllerRef.current?.abort()
     }
-  }, [profile?.id])
+  }, [currentBusiness?.id, businessLoading])
 
   async function loadStats() {
-    const businessId = profile?.business_id || profile?.shop_id
+    const businessId = currentBusiness?.id
     if (!businessId) {
-      console.error('Dashboard: business_id is missing', profile)
       setError('Business information not found. Please contact support.')
       setLoading(false)
       return
@@ -162,7 +150,6 @@ export default function Dashboard() {
         .sort((a, b) => b.revenue - a.revenue)
         .slice(0, 5)
 
- setError(null)
       setStats({ today_sales: todaySales, today_transactions: todayTx, total_products: products.length, low_stock_count: lowStock, total_debtors: debtors.length, total_debt_amount: totalDebt, week_revenue, top_products })
     } catch (err) {
       if (!controller.signal.aborted) {
@@ -176,12 +163,25 @@ export default function Dashboard() {
     }
   }
 
-  if (loading) return (
+  if (businessLoading || loading) return (
     <div>
       <div className="page-header">
         <h2><ShoppingCart size={20} />{t('dashboard')}</h2>
       </div>
       <StatSkeleton />
+    </div>
+  )
+
+  if (!currentBusiness) return (
+    <div>
+      <div className="page-header">
+        <h2><ShoppingCart size={20} />{t('dashboard')}</h2>
+      </div>
+      <div className="card" style={{ textAlign: 'center', padding: '48px 24px' }}>
+        <AlertTriangle size={48} style={{ color: 'var(--yellow)', marginBottom: 16 }} />
+        <h3 style={{ marginBottom: 8 }}>No Business Selected</h3>
+        <p style={{ color: 'var(--text3)' }}>Select or create a business from the header to view your dashboard.</p>
+      </div>
     </div>
   )
 

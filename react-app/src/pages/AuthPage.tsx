@@ -26,7 +26,11 @@ export default function AuthPage() {
         if (!form.full_name || !form.shop_name) { setError('Please fill all fields'); setLoading(false); return }
         const { error: err } = await signUp(form.email, form.password, form.full_name, form.shop_name)
         if (err) setError(err)
-        else setSuccess(lang === 'sw' ? 'Akaunti imefunguliwa! Angalia barua pepe yako.' : 'Account created! Check your email to confirm.')
+        else {
+          setSuccess(lang === 'sw' ? 'Akaunti imefunguliwa! Angalia barua pepe yako.' : 'Account created! Check your email to confirm.')
+          setForm({ email: '', password: '', full_name: '', shop_name: '' })
+          setMode('login')
+        }
       }
     } finally { setLoading(false) }
   }

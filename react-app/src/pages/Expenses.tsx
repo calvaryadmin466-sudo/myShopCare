@@ -1,9 +1,10 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../contexts/AuthContext'
+import { useBusiness } from '../contexts/BusinessContext'
 import { useLang } from '../contexts/LangContext'
 import type { Expense } from '../types'
-import { Plus, Receipt, Trash2, X } from 'lucide-react'
+import { Plus, Receipt, Trash2, X, AlertTriangle } from 'lucide-react'
 
 const PAYMENT_METHODS: Expense['payment_method'][] = ['cash', 'mobile_money', 'card', 'bank', 'other']
 
@@ -42,34 +43,73 @@ const EMPTY: FormState = {
 
 export default function Expenses() {
   const { profile } = useAuth()
+  const { currentBusiness, loading: businessLoading } = useBusiness()
   const { t } = useLang()
   const [items, setItems] = useState<Expense[]>([])
   const [loading, setLoading] = useState(true)
   const [modal, setModal] = useState(false)
   const [saving, setSaving] = useState(false)
   const [form, setForm] = useState<FormState>({ ...EMPTY })
+  const [currentPage, setCurrentPage] = useState(1)
+  const [totalCount, setTotalCount] = useState(0)
+  const [totalAmount, setTotalAmount] = useState(0)
+  const pageSize = 25
 
-  useEffect(() => { if (profile) load() }, [profile])
+  useEffect(() => {
+    if (businessLoading) return
+    if (profile && currentBusiness?.id) {
+      load()
+    } else {
+      setItems([])
+      setTotalCount(0)
+      setLoading(false)
+    }
+  }, [profile, currentBusiness?.id, businessLoading, currentPage])
+  useEffect(() => {
+    if (profile && currentBusiness?.id) loadTotal()
+  }, [profile, currentBusiness?.id])
 
   async function load() {
-    if (!profile) return
+    const businessId = currentBusiness?.id
+    if (!profile || !businessId) { setLoading(false); return }
     setLoading(true)
-    const { data, error } = await supabase
+    const from = (currentPage - 1) * pageSize
+    const to = from + pageSize - 1
+    const { data, error, count } = await supabase
       .from('expenses')
-      .select('*')
-      .eq('business_id', profile.business_id || profile.shop_id)
+      .select('*', { count: 'exact' })
+      .eq('business_id', businessId)
       .order('expense_date', { ascending: false })
-      .limit(300)
+      .range(from, to)
     if (error) {
       console.error('Error loading expenses:', error)
       setItems([])
+      setTotalCount(0)
     } else {
       setItems((data as Expense[]) || [])
+      setTotalCount(count || 0)
     }
     setLoading(false)
   }
 
-  const totalAmount = useMemo(() => items.reduce((s, e) => s + Number(e.amount || 0), 0), [items])
+  // Total amount must reflect ALL matching expenses, not just the current page,
+  // so we fetch just the amount column across every record (no row cap).
+  async function loadTotal() {
+    const businessId = currentBusiness?.id
+    if (!profile || !businessId) return
+    const { data, error } = await supabase
+      .from('expenses')
+      .select('amount')
+      .eq('business_id', businessId)
+    if (error) {
+      console.error('Error loading expense totals:', error)
+      return
+    }
+    const sum = (data || []).reduce((s, e: any) => s + Number(e.amount || 0), 0)
+    setTotalAmount(sum)
+  }
+
+  const totalPages = Math.ceil(totalCount / pageSize)
 
   function openAdd() {
     setForm({ ...EMPTY })
@@ -89,11 +129,11 @@ export default function Expenses() {
   }
 
   async function save() {
-    if (!profile) return
+    if (!profile || !currentBusiness?.id) return
     if (!form.category || !form.expense_date) return
     setSaving(true)
     const payload = {
-      business_id: profile.business_id || profile.shop_id,
+      business_id: currentBusiness.id,
       category: form.category,
       description: form.description || null,
       amount: +form.amount || 0,
@@ -109,13 +149,28 @@ export default function Expenses() {
     setModal(false)
     setForm({ ...EMPTY })
     load()
+    loadTotal()
   }
 
   async function deleteExpense(id: string) {
     if (!confirm(t('confirm_delete'))) return
     await supabase.from('expenses').delete().eq('id', id)
     load()
+    loadTotal()
   }
+
+  if (!businessLoading && !currentBusiness) return (
+    <div>
+      <div className="page-header">
+        <h2><Receipt size={18} />{t('expenses')}</h2>
+      </div>
+      <div className="card" style={{ textAlign: 'center', padding: '48px 24px' }}>
+        <AlertTriangle size={48} style={{ color: 'var(--yellow)', marginBottom: 16 }} />
+        <h3 style={{ marginBottom: 8 }}>No Business Selected</h3>
+        <p style={{ color: 'var(--text3)' }}>Select or create a business from the header to manage expenses.</p>
+      </div>
+    </div>
+  )
 
   return (
     <div>
@@ -171,6 +226,28 @@ export default function Expenses() {
           </table>
         </div>
       </div>
+
+      {totalPages > 1 && (
+        <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: 16, marginTop: 16 }}>
+          <button
+            className="btn btn-ghost"
+            onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+            disabled={currentPage === 1}
+          >
+            Previous
+          </button>
+          <span style={{ color: 'var(--text2)' }}>
+            Page {currentPage} of {totalPages} ({totalCount} total)
+          </span>
+          <button
+            className="btn btn-ghost"
+            onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+            disabled={currentPage === totalPages}
+          >
+            Next
+          </button>
+        </div>
+      )}
 
       {modal && (
         <div className="modal-overlay" onClick={() => !saving && setModal(false)}>
