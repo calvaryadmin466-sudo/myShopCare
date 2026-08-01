@@ -136,8 +136,6 @@ export default function Reports() {
 
     if (salesError) console.error('Error loading sales for reports:', salesError)
     const sales = ((salesData as SaleWithItems[]) || []).filter(s => {
-      const received = Math.max(0, Number(s.amount_paid || 0) - Number(s.change_given || 0))
-      if (received <= 0) return false
       if (!pmFilter) return true
       return s.payment_method === pmFilter
     })
@@ -205,7 +203,8 @@ export default function Reports() {
 
     for (const s of sales) {
       const received = Math.max(0, Number(s.amount_paid || 0) - Number(s.change_given || 0))
-      const ratio = safeDiv(received, Number(s.total || 0))
+      const total = Number(s.total || 0)
+      const ratio = total > 0 ? safeDiv(received, total) : 0
       const items = (s.sale_items || []) as SaleItem[]
       for (const i of items) {
         const itemTotal = Number(i.total_price || 0)
