@@ -88,6 +88,13 @@ export default function Deals() {
       discount_value: discountValue,
       min_purchase: form.min_purchase ? +form.min_purchase : null,
       business_id: currentBusiness.id,
+      // The live deals table also carries a newer, still-NOT-NULL type/value
+      // pair alongside the deal_type/discount_value columns this app actually
+      // reads from — keep them in sync so inserts don't fail that constraint.
+      type: form.deal_type,
+      value: discountValue,
+      starts_at: new Date(`${form.start_date}T00:00:00`).toISOString(),
+      ends_at: new Date(`${form.end_date}T00:00:00`).toISOString(),
     })
     setSaving(false)
     if (error) { setFormError(error.message); return }
