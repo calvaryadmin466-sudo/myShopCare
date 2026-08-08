@@ -637,7 +637,6 @@ tbody tr:last-child { border-bottom: none; }
   .filters .search-bar { flex-basis: 100%; max-width: none !important; }
   .product-grid { grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); }
   .pos-product-row { align-items: flex-start; }
-  .pos-cart { max-height: calc(100vh - 140px); }
   .pos-cart-header, .pos-cart-footer { padding-left: 14px; padding-right: 14px; }
   .pos-cart-items { padding: 8px; }
 }
