@@ -104,7 +104,7 @@ export default function Products() {
       return
     }
     setSaving(true)
-    const payload = { ...form, business_id: currentBusiness.id, category: form.category.trim() || 'General', description: form.description?.trim() || null, image_url: form.image_url || null, buying_price: buyingPrice, selling_price: sellingPrice, stock_quantity: stockQuantity, low_stock_threshold: +form.low_stock_threshold, expiry_date: form.expiry_date || null, expiry_days_alert: +form.expiry_days_alert || 30, shop_id: profile!.shop_id }
+    const payload = { ...form, business_id: currentBusiness.id, category: form.category.trim() || 'General', description: form.description?.trim() || null, image_url: form.image_url || null, buying_price: buyingPrice, selling_price: sellingPrice, stock_quantity: stockQuantity, low_stock_threshold: +form.low_stock_threshold, expiry_date: form.expiry_date || null, expiry_days_alert: +form.expiry_days_alert || 30 }
     if (editing) {
       const { error: err } = await supabase.from('products').update(payload).eq('id', editing.id)
       if (err) { setError(err.message || 'Error updating product'); setSaving(false); return }
