@@ -51,7 +51,7 @@ export function AuditLogViewer({ tableFilter, limit = 50 }: AuditLogViewerProps)
     const { data, error } = await query
     if (error) {
       console.error('Error loading audit logs:', error)
-      setError(error.message || 'Failed to load audit logs')
+      setError(error.message || t('failed_load_audit_logs'))
       setLogs([])
       setLoading(false)
       return
@@ -142,8 +142,8 @@ export function AuditLogViewer({ tableFilter, limit = 50 }: AuditLogViewerProps)
   return (
     <div className="audit-log-viewer">
       <div className="card">
-        <div className="card-title">Audit Logs</div>
-        
+        <div className="card-title">{t('audit_log')}</div>
+
         {/* Filters */}
         <div className="filters" style={{ marginBottom: 16, display: 'flex', gap: 12, flexWrap: 'wrap' }}>
           <div className="search-bar" style={{ flex: 1, minWidth: 200 }}>
@@ -151,10 +151,10 @@ export function AuditLogViewer({ tableFilter, limit = 50 }: AuditLogViewerProps)
             <input
               value={search}
               onChange={e => setSearch(e.target.value)}
-              placeholder="Search logs..."
+              placeholder={t('search_logs')}
             />
           </div>
-          
+
           <select
             value={actionFilter}
             onChange={e => setActionFilter(e.target.value)}
@@ -162,7 +162,7 @@ export function AuditLogViewer({ tableFilter, limit = 50 }: AuditLogViewerProps)
           >
             {actions.map(action => (
               <option key={action} value={action}>
-                {action === 'all' ? 'All Actions' : action.charAt(0).toUpperCase() + action.slice(1)}
+                {action === 'all' ? t('all_actions') : action.charAt(0).toUpperCase() + action.slice(1)}
               </option>
             ))}
           </select>
@@ -175,14 +175,14 @@ export function AuditLogViewer({ tableFilter, limit = 50 }: AuditLogViewerProps)
             >
               {tables.map(table => (
                 <option key={table} value={table}>
-                  {table === 'all' ? 'All Tables' : table}
+                  {table === 'all' ? t('all_tables') : table}
                 </option>
               ))}
             </select>
           )}
 
           <button className="btn btn-ghost" onClick={() => handleExport('csv')}>
-            <Download size={16} /> Export
+            <Download size={16} /> {t('export')}
           </button>
         </div>
 
@@ -195,12 +195,12 @@ export function AuditLogViewer({ tableFilter, limit = 50 }: AuditLogViewerProps)
         ) : error ? (
           <div className="card" style={{ textAlign: 'center', padding: '32px 24px' }}>
             <AlertTriangle size={32} style={{ color: 'var(--red)', marginBottom: 12 }} />
-            <p style={{ color: 'var(--text3)', marginBottom: 16 }}>Failed to load audit logs: {error}</p>
+            <p style={{ color: 'var(--text3)', marginBottom: 16 }}>{t('failed_load_audit_logs')}: {error}</p>
             <button className="btn btn-primary" onClick={() => loadLogs()}>{t('retry') || 'Retry'}</button>
           </div>
         ) : filteredLogs.length === 0 ? (
           <div className="empty-state">
-            <p>No audit logs found</p>
+            <p>{t('no_audit_logs')}</p>
           </div>
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
@@ -240,7 +240,7 @@ export function AuditLogViewer({ tableFilter, limit = 50 }: AuditLogViewerProps)
                     )}
                     {log.user_id && (
                       <span style={{ fontSize: '0.8rem', color: 'var(--text2)' }}>
-                        by {getUserLabel(log.user_id)}
+                        {t('by_user')} {getUserLabel(log.user_id)}
                       </span>
                     )}
                   </div>
@@ -257,7 +257,7 @@ export function AuditLogViewer({ tableFilter, limit = 50 }: AuditLogViewerProps)
                     {log.old_values && (
                       <div style={{ marginBottom: 12 }}>
                         <div style={{ fontSize: '0.8rem', fontWeight: 600, marginBottom: 4, color: 'var(--red)' }}>
-                          Old Values:
+                          {t('old_values')}
                         </div>
                         <pre style={{ 
                           background: 'var(--bg2)', 
@@ -274,7 +274,7 @@ export function AuditLogViewer({ tableFilter, limit = 50 }: AuditLogViewerProps)
                     {log.new_values && (
                       <div>
                         <div style={{ fontSize: '0.8rem', fontWeight: 600, marginBottom: 4, color: 'var(--green)' }}>
-                          New Values:
+                          {t('new_values')}
                         </div>
                         <pre style={{ 
                           background: 'var(--bg2)', 

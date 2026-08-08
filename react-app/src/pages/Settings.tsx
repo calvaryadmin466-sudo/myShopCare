@@ -143,7 +143,7 @@ export default function Settings() {
             className={activeTab === 'audit' ? 'btn btn-primary' : 'btn btn-ghost'}
             onClick={() => setActiveTab('audit')}
           >
-            Audit Log
+            {t('audit_log')}
           </button>
         </div>
       </div>

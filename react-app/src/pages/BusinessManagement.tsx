@@ -1,20 +1,10 @@
 import { useRef, useState } from 'react'
 import { useBusiness } from '../contexts/BusinessContext'
 import { useAuth } from '../contexts/AuthContext'
+import { useLang } from '../contexts/LangContext'
 import { uploadBusinessLogo, deleteBusinessLogo } from '../lib/logoUpload'
 import type { Business } from '../types'
 import { Building2, Plus, Edit2, Settings, Image as ImageIcon, Trash2, X, Upload, Copy, Check } from 'lucide-react'
-
-function formatDate(dateString: string) {
-  const date = new Date(dateString)
-  const now = new Date()
-  const diffDays = Math.floor((now.getTime() - date.getTime()) / 86400000)
-
-  if (diffDays <= 0) return 'Today'
-  if (diffDays === 1) return 'Yesterday'
-  if (diffDays < 7) return `${diffDays} days ago`
-  return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
-}
 
 const COLOR_OPTIONS = [
   '#F7B23B', '#3B82F6', '#10B981', '#EF4444',
@@ -24,6 +14,18 @@ const COLOR_OPTIONS = [
 export default function BusinessManagement() {
   const { businesses, currentBusiness, createBusiness, updateBusiness, deleteBusiness, refreshBusinesses } = useBusiness()
   const { user } = useAuth()
+  const { t, lang } = useLang()
+
+  function formatDate(dateString: string) {
+    const date = new Date(dateString)
+    const now = new Date()
+    const diffDays = Math.floor((now.getTime() - date.getTime()) / 86400000)
+
+    if (diffDays <= 0) return t('today')
+    if (diffDays === 1) return t('yesterday')
+    if (diffDays < 7) return `${diffDays} ${t('days_ago_suffix')}`
+    return date.toLocaleDateString(lang === 'sw' ? 'sw-TZ' : 'en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+  }
   const [modal, setModal] = useState<'create' | 'edit' | 'settings' | 'logo' | null>(null)
   const [editingBusiness, setEditingBusiness] = useState<Business | null>(null)
   const [loading, setLoading] = useState(false)
@@ -41,8 +43,8 @@ export default function BusinessManagement() {
   })
 
   async function uploadLogoFile(file: File, business: Business) {
-    if (!file.type.startsWith('image/')) { setError('File must be an image'); return }
-    if (file.size > 5 * 1024 * 1024) { setError('File size must be less than 5MB'); return }
+    if (!file.type.startsWith('image/')) { setError(t('file_must_be_image')); return }
+    if (file.size > 5 * 1024 * 1024) { setError(t('file_size_limit')); return }
 
     setIsUploading(true)
     setUploadProgress(0)
@@ -125,7 +127,7 @@ export default function BusinessManagement() {
   }
 
   async function handleDelete(businessId: string) {
-    if (!confirm('Are you sure you want to delete this business? This action cannot be undone.')) return
+    if (!confirm(t('confirm_delete_business'))) return
     setLoading(true)
     setError(null)
     try {
@@ -147,12 +149,12 @@ export default function BusinessManagement() {
     <div>
       <div className="page-header">
         <div>
-          <h2><Building2 size={20} />Business Management</h2>
+          <h2><Building2 size={20} />{t('biz_management_title')}</h2>
           <p style={{ fontSize: '0.85rem', color: 'var(--text3)', marginTop: 4 }}>
-            Manage all your businesses, branding, and currencies.
+            {t('biz_management_subtitle')}
           </p>
         </div>
-        <button className="btn btn-primary" onClick={openCreateModal}><Plus size={16} />Add Business</button>
+        <button className="btn btn-primary" onClick={openCreateModal}><Plus size={16} />{t('add_business')}</button>
       </div>
 
       {error && !modal && <div className="alert alert-error">{error}</div>}
@@ -160,18 +162,18 @@ export default function BusinessManagement() {
       <div className="stats-grid">
         <div className="stat-card">
           <div className="stat-icon" style={{ background: 'var(--accent-light)', color: 'var(--accent)' }}><Building2 /></div>
-          <div className="stat-label">Businesses</div>
+          <div className="stat-label">{t('businesses')}</div>
           <div className="stat-value" style={{ color: 'var(--accent)' }}>{businesses.length}</div>
-          <div className="stat-sub">Total organizations</div>
+          <div className="stat-sub">{t('total_organizations')}</div>
         </div>
       </div>
 
       {businesses.length === 0 ? (
         <div className="card empty-state">
           <Building2 />
-          <p>No businesses yet. Create your first business to start managing sales, products, and reports.</p>
+          <p>{t('no_businesses_yet')}</p>
           <div className="empty-action">
-            <button className="btn btn-primary" onClick={openCreateModal}><Plus size={16} />Create Business</button>
+            <button className="btn btn-primary" onClick={openCreateModal}><Plus size={16} />{t('create_business')}</button>
           </div>
         </div>
       ) : (
@@ -188,30 +190,30 @@ export default function BusinessManagement() {
                   </div>
                   <div style={{ minWidth: 0, flex: 1 }}>
                     <div className="biz-card-title" style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{business.name}</div>
-                    <span className={`badge ${isActive ? 'badge-green' : 'badge-yellow'}`}>● {isActive ? 'Active' : 'Inactive'}</span>
+                    <span className={`badge ${isActive ? 'badge-green' : 'badge-yellow'}`}>● {isActive ? t('active') : t('inactive')}</span>
                   </div>
                 </div>
 
                 <div className="biz-details">
-                  <div className="summary-row"><span>Currency</span><span style={{ fontWeight: 600, color: 'var(--text)' }}>{business.currency}</span></div>
+                  <div className="summary-row"><span>{t('currency')}</span><span style={{ fontWeight: 600, color: 'var(--text)' }}>{business.currency}</span></div>
                   <div className="summary-row">
-                    <span>Brand Color</span>
+                    <span>{t('brand_color')}</span>
                     <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                       <span style={{ width: 14, height: 14, borderRadius: 4, background: business.theme_color, display: 'inline-block' }} />
                       <span style={{ fontFamily: 'monospace', fontSize: '0.75rem' }}>{business.theme_color}</span>
                     </span>
                   </div>
-                  <div className="summary-row"><span>Created</span><span style={{ fontWeight: 600, color: 'var(--text)' }}>{formatDate(business.created_at)}</span></div>
-                  <div className="summary-row"><span>Updated</span><span style={{ fontWeight: 600, color: 'var(--text)' }}>{formatDate(business.updated_at)}</span></div>
+                  <div className="summary-row"><span>{t('created')}</span><span style={{ fontWeight: 600, color: 'var(--text)' }}>{formatDate(business.created_at)}</span></div>
+                  <div className="summary-row"><span>{t('updated')}</span><span style={{ fontWeight: 600, color: 'var(--text)' }}>{formatDate(business.updated_at)}</span></div>
                 </div>
 
                 <div className="biz-actions">
-                  <button className="btn btn-ghost" onClick={() => openEditModal(business)}><Edit2 size={14} />Edit Business</button>
+                  <button className="btn btn-ghost" onClick={() => openEditModal(business)}><Edit2 size={14} />{t('edit_business')}</button>
                   <div className="biz-actions-row">
-                    <button className="btn btn-ghost btn-sm" onClick={() => { setEditingBusiness(business); setError(null); setModal('settings') }}><Settings size={13} />Settings</button>
-                    <button className="btn btn-ghost btn-sm" onClick={() => { setEditingBusiness(business); setError(null); setModal('logo') }}><ImageIcon size={13} />Upload Logo</button>
+                    <button className="btn btn-ghost btn-sm" onClick={() => { setEditingBusiness(business); setError(null); setModal('settings') }}><Settings size={13} />{t('settings')}</button>
+                    <button className="btn btn-ghost btn-sm" onClick={() => { setEditingBusiness(business); setError(null); setModal('logo') }}><ImageIcon size={13} />{t('upload_logo')}</button>
                   </div>
-                  <button className="btn btn-danger" onClick={() => handleDelete(business.id)} disabled={loading}><Trash2 size={14} />Delete</button>
+                  <button className="btn btn-danger" onClick={() => handleDelete(business.id)} disabled={loading}><Trash2 size={14} />{t('delete')}</button>
                 </div>
               </div>
             )
@@ -224,18 +226,18 @@ export default function BusinessManagement() {
         <div className="modal-overlay" onClick={() => setModal(null)}>
           <div className="modal" onClick={e => e.stopPropagation()}>
             <div className="modal-header">
-              <h3>Create New Business</h3>
+              <h3>{t('create_new_business')}</h3>
               <button className="btn btn-ghost btn-sm" onClick={() => setModal(null)}><X size={16} /></button>
             </div>
             <form onSubmit={handleCreate}>
               <div className="modal-body">
                 {error && <div className="alert alert-error">{error}</div>}
                 <div className="form-group">
-                  <label>Business Name *</label>
-                  <input type="text" required autoFocus value={formData.name} onChange={e => setFormData(f => ({ ...f, name: e.target.value }))} placeholder="My Business" />
+                  <label>{t('business_name_label')}</label>
+                  <input type="text" required autoFocus value={formData.name} onChange={e => setFormData(f => ({ ...f, name: e.target.value }))} placeholder={t('my_business_placeholder')} />
                 </div>
                 <div className="form-group">
-                  <label>Currency</label>
+                  <label>{t('currency')}</label>
                   <select value={formData.currency} onChange={e => setFormData(f => ({ ...f, currency: e.target.value as any }))}>
                     <option value="USD">USD ($)</option>
                     <option value="TZS">TZS (TSh)</option>
@@ -243,7 +245,7 @@ export default function BusinessManagement() {
                   </select>
                 </div>
                 <div className="form-group">
-                  <label>Brand Color</label>
+                  <label>{t('brand_color')}</label>
                   <div className="color-swatches">
                     {COLOR_OPTIONS.map(color => (
                       <button key={color} type="button" className={`color-swatch ${formData.themeColor === color ? 'active' : ''}`} style={{ background: color }} onClick={() => setFormData(f => ({ ...f, themeColor: color }))} />
@@ -256,8 +258,8 @@ export default function BusinessManagement() {
                 </div>
               </div>
               <div className="modal-footer">
-                <button type="button" className="btn btn-ghost" onClick={() => setModal(null)}>Cancel</button>
-                <button type="submit" className="btn btn-primary" disabled={loading}>{loading ? 'Creating...' : 'Create Business'}</button>
+                <button type="button" className="btn btn-ghost" onClick={() => setModal(null)}>{t('cancel')}</button>
+                <button type="submit" className="btn btn-primary" disabled={loading}>{loading ? t('creating') : t('create_business')}</button>
               </div>
             </form>
           </div>
@@ -269,18 +271,18 @@ export default function BusinessManagement() {
         <div className="modal-overlay" onClick={() => setModal(null)}>
           <div className="modal" onClick={e => e.stopPropagation()}>
             <div className="modal-header">
-              <h3>Edit Business</h3>
+              <h3>{t('edit_business')}</h3>
               <button className="btn btn-ghost btn-sm" onClick={() => setModal(null)}><X size={16} /></button>
             </div>
             <form onSubmit={handleUpdate}>
               <div className="modal-body">
                 {error && <div className="alert alert-error">{error}</div>}
                 <div className="form-group">
-                  <label>Business Name *</label>
+                  <label>{t('business_name_label')}</label>
                   <input type="text" required autoFocus value={formData.name} onChange={e => setFormData(f => ({ ...f, name: e.target.value }))} />
                 </div>
                 <div className="form-group">
-                  <label>Currency</label>
+                  <label>{t('currency')}</label>
                   <select value={formData.currency} onChange={e => setFormData(f => ({ ...f, currency: e.target.value as any }))}>
                     <option value="USD">USD ($)</option>
                     <option value="TZS">TZS (TSh)</option>
@@ -288,7 +290,7 @@ export default function BusinessManagement() {
                   </select>
                 </div>
                 <div className="form-group">
-                  <label>Brand Color</label>
+                  <label>{t('brand_color')}</label>
                   <div className="color-swatches">
                     {COLOR_OPTIONS.map(color => (
                       <button key={color} type="button" className={`color-swatch ${formData.themeColor === color ? 'active' : ''}`} style={{ background: color }} onClick={() => setFormData(f => ({ ...f, themeColor: color }))} />
@@ -301,8 +303,8 @@ export default function BusinessManagement() {
                 </div>
               </div>
               <div className="modal-footer">
-                <button type="button" className="btn btn-ghost" onClick={() => setModal(null)}>Cancel</button>
-                <button type="submit" className="btn btn-primary" disabled={loading}>{loading ? 'Saving...' : 'Save Changes'}</button>
+                <button type="button" className="btn btn-ghost" onClick={() => setModal(null)}>{t('cancel')}</button>
+                <button type="submit" className="btn btn-primary" disabled={loading}>{loading ? t('saving') : t('save_changes')}</button>
               </div>
             </form>
           </div>
@@ -314,7 +316,7 @@ export default function BusinessManagement() {
         <div className="modal-overlay" onClick={() => !isUploading && setModal(null)}>
           <div className="modal" onClick={e => e.stopPropagation()}>
             <div className="modal-header">
-              <h3>Upload Logo</h3>
+              <h3>{t('upload_logo')}</h3>
               <button className="btn btn-ghost btn-sm" onClick={() => setModal(null)} disabled={isUploading}><X size={16} /></button>
             </div>
             <div className="modal-body">
@@ -331,11 +333,11 @@ export default function BusinessManagement() {
                 }}
               >
                 <Upload size={40} style={{ color: 'var(--accent)', marginBottom: 12 }} />
-                <div style={{ fontWeight: 600, marginBottom: 6 }}>Drag logo here</div>
+                <div style={{ fontWeight: 600, marginBottom: 6 }}>{t('drag_logo_here')}</div>
                 <div style={{ fontSize: '0.82rem', color: 'var(--text3)', marginBottom: 8 }}>
-                  or <span className="browse-link" onClick={() => fileInputRef.current?.click()}>Browse Files</span>
+                  or <span className="browse-link" onClick={() => fileInputRef.current?.click()}>{t('browse_files')}</span>
                 </div>
-                <div style={{ fontSize: '0.72rem', color: 'var(--text3)' }}>PNG, JPG, SVG • Maximum 5MB</div>
+                <div style={{ fontSize: '0.72rem', color: 'var(--text3)' }}>{t('logo_upload_hint')}</div>
                 {isUploading && (
                   <>
                     <div className="progress-track"><div className="progress-fill" style={{ width: `${uploadProgress}%` }} /></div>
@@ -365,12 +367,12 @@ export default function BusinessManagement() {
         <div className="modal-overlay" onClick={() => setModal(null)}>
           <div className="modal" onClick={e => e.stopPropagation()}>
             <div className="modal-header">
-              <h3>Business Settings</h3>
+              <h3>{t('business_settings')}</h3>
               <button className="btn btn-ghost btn-sm" onClick={() => setModal(null)}><X size={16} /></button>
             </div>
             <div className="modal-body">
               <div className="info-row">
-                <div className="info-row-label">Business ID</div>
+                <div className="info-row-label">{t('business_id')}</div>
                 <div className="info-row-copy">
                   <span className="info-row-value mono">{editingBusiness.id}</span>
                   <button className="btn btn-ghost btn-sm" onClick={() => copyId(editingBusiness.id)}>
@@ -379,20 +381,20 @@ export default function BusinessManagement() {
                 </div>
               </div>
               <div className="info-row">
-                <div className="info-row-label">Owner ID</div>
+                <div className="info-row-label">{t('owner_id')}</div>
                 <div className="info-row-value mono">{editingBusiness.owner_id}</div>
               </div>
               <div className="info-row">
-                <div className="info-row-label">Created</div>
+                <div className="info-row-label">{t('created')}</div>
                 <div className="info-row-value">{formatDate(editingBusiness.created_at)}</div>
               </div>
               <div className="info-row">
-                <div className="info-row-label">Last Updated</div>
+                <div className="info-row-label">{t('last_updated')}</div>
                 <div className="info-row-value">{formatDate(editingBusiness.updated_at)}</div>
               </div>
             </div>
             <div className="modal-footer">
-              <button className="btn btn-ghost" onClick={() => setModal(null)}>Close</button>
+              <button className="btn btn-ghost" onClick={() => setModal(null)}>{t('close')}</button>
             </div>
           </div>
         </div>

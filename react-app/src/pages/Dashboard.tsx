@@ -4,7 +4,10 @@ import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recha
 import { supabase } from '../lib/supabase'
 import { useBusiness } from '../contexts/BusinessContext'
 import { useLang } from '../contexts/LangContext'
-import { ShoppingCart, Package, AlertTriangle, TrendingUp, Users, History, CreditCard, Tag } from 'lucide-react'
+import {
+  ShoppingCart, Package, AlertTriangle, TrendingUp, TrendingDown, Users, History,
+  CreditCard, Tag, CheckCircle2, Plus, Receipt
+} from 'lucide-react'
 
 function StatSkeleton() {
   return (
@@ -21,15 +24,23 @@ function StatSkeleton() {
   )
 }
 
+interface LowStockItem { id: string; name: string; stock_quantity: number; low_stock_threshold: number }
+interface OverdueDebt { id: string; customer_name: string; balance: number; due_date?: string }
+interface TopProduct { id: string; name: string; qty: number; revenue: number; image_url?: string }
+
 interface Stats {
   today_sales: number
   today_transactions: number
+  revenue_trend: number
+  tx_trend: number
   total_products: number
   low_stock_count: number
+  low_stock_items: LowStockItem[]
   total_debtors: number
   total_debt_amount: number
+  overdue_debts: OverdueDebt[]
   week_revenue: { date: string; revenue: number }[]
-  top_products: { name: string; qty: number; revenue: number }[]
+  top_products: TopProduct[]
 }
 
 function fmt(n: number) {
@@ -99,15 +110,17 @@ export default function Dashboard() {
 
     try {
       const today = new Date().toISOString().split('T')[0]
+      const yesterday = new Date(Date.now() - 86400000).toISOString().split('T')[0]
       const weekAgo = new Date(Date.now() - 7 * 86400000).toISOString().split('T')[0]
 
-      const [todaySalesRes, productsRes, debtsRes, weekSalesRes, topProductsRes] = await Promise.all([
+      const [todaySalesRes, yesterdaySalesRes, productsRes, debtsRes, weekSalesRes, topProductsRes] = await Promise.all([
         supabase.from('sales').select('id, total').eq('business_id', businessId).gte('created_at', today),
-        supabase.from('products').select('id, stock_quantity, low_stock_threshold').eq('business_id', businessId),
-        supabase.from('debts').select('balance').eq('business_id', businessId).eq('status', 'active'),
+        supabase.from('sales').select('id, total').eq('business_id', businessId).gte('created_at', yesterday).lt('created_at', today),
+        supabase.from('products').select('id, name, image_url, stock_quantity, low_stock_threshold').eq('business_id', businessId),
+        supabase.from('debts').select('id, customer_name, balance, due_date, status').eq('business_id', businessId).in('status', ['active', 'overdue']),
         supabase.from('sales').select('created_at, total').eq('business_id', businessId).gte('created_at', weekAgo).order('created_at'),
         supabase.from('sale_items')
-          .select('product_name, quantity, total_price, sale_id, sales!inner(business_id)')
+          .select('product_id, product_name, quantity, total_price, sale_id, sales!inner(business_id)')
           .eq('sales.business_id', businessId)
           .limit(200),
       ])
@@ -118,10 +131,26 @@ export default function Dashboard() {
       const todaySalesData = todaySalesRes.data || []
       const todaySales = todaySalesData.reduce((s, r) => s + Number(r.total), 0)
       const todayTx = todaySalesData.length
+
+      const yesterdaySalesData = yesterdaySalesRes.data || []
+      const yesterdaySales = yesterdaySalesData.reduce((s, r) => s + Number(r.total), 0)
+      const yesterdayTx = yesterdaySalesData.length
+      const revenue_trend = yesterdaySales > 0 ? ((todaySales - yesterdaySales) / yesterdaySales) * 100 : (todaySales > 0 ? 100 : 0)
+      const tx_trend = yesterdayTx > 0 ? ((todayTx - yesterdayTx) / yesterdayTx) * 100 : (todayTx > 0 ? 100 : 0)
+
       const products = productsRes.data || []
+      const low_stock_items = products
+        .filter(p => p.stock_quantity <= p.low_stock_threshold)
+        .sort((a, b) => a.stock_quantity - b.stock_quantity)
+        .slice(0, 4)
       const lowStock = products.filter(p => p.stock_quantity <= p.low_stock_threshold).length
+
       const debtors = debtsRes.data || []
       const totalDebt = debtors.reduce((s, d) => s + Number(d.balance), 0)
+      const overdue_debts = debtors
+        .filter(d => d.status === 'overdue')
+        .sort((a, b) => Number(b.balance) - Number(a.balance))
+        .slice(0, 4)
 
       // Group week sales by date
       const byDate: Record<string, number> = {}
@@ -138,19 +167,26 @@ export default function Dashboard() {
         revenue
       }))
 
-      // Top products
-      const prodMap: Record<string, { qty: number; revenue: number }> = {}
+      // Top products (by revenue, joined back to product photos)
+      const imageByProductId = Object.fromEntries(products.map(p => [p.id, p.image_url]))
+      const prodMap: Record<string, TopProduct> = {}
       for (const item of (topProductsRes.data || [])) {
-        if (!prodMap[item.product_name]) prodMap[item.product_name] = { qty: 0, revenue: 0 }
-        prodMap[item.product_name].qty += Number(item.quantity)
-        prodMap[item.product_name].revenue += Number(item.total_price)
+        const key = item.product_id || item.product_name
+        if (!prodMap[key]) prodMap[key] = { id: item.product_id, name: item.product_name, qty: 0, revenue: 0 }
+        prodMap[key].qty += Number(item.quantity)
+        prodMap[key].revenue += Number(item.total_price)
       }
-      const top_products = Object.entries(prodMap)
-        .map(([name, v]) => ({ name, ...v }))
+      const top_products = Object.values(prodMap)
+        .map(p => ({ ...p, image_url: imageByProductId[p.id] || '' }))
         .sort((a, b) => b.revenue - a.revenue)
         .slice(0, 5)
 
-      setStats({ today_sales: todaySales, today_transactions: todayTx, total_products: products.length, low_stock_count: lowStock, total_debtors: debtors.length, total_debt_amount: totalDebt, week_revenue, top_products })
+      setStats({
+        today_sales: todaySales, today_transactions: todayTx, revenue_trend, tx_trend,
+        total_products: products.length, low_stock_count: lowStock, low_stock_items,
+        total_debtors: debtors.length, total_debt_amount: totalDebt, overdue_debts,
+        week_revenue, top_products
+      })
     } catch (err) {
       if (!controller.signal.aborted) {
         console.error('Dashboard load error:', err)
@@ -194,8 +230,8 @@ export default function Dashboard() {
         <AlertTriangle size={48} style={{ color: 'var(--red)', marginBottom: 16 }} />
         <h3 style={{ marginBottom: 8 }}>{t('error_loading_dashboard') || 'Error Loading Dashboard'}</h3>
         <p style={{ color: 'var(--text3)', marginBottom: 24 }}>{error}</p>
-        <button 
-          className="btn btn-primary" 
+        <button
+          className="btn btn-primary"
           onClick={() => loadStats()}
           style={{ padding: '12px 24px' }}
         >
@@ -205,11 +241,21 @@ export default function Dashboard() {
     </div>
   )
 
+  function Trend({ pct }: { pct: number }) {
+    const up = pct >= 0
+    return (
+      <div className="stat-trend" style={{ color: up ? 'var(--green)' : 'var(--red)' }}>
+        {up ? <TrendingUp size={13} /> : <TrendingDown size={13} />}
+        <span>{up ? '+' : ''}{pct.toFixed(0)}% {t('vs_yesterday')}</span>
+      </div>
+    )
+  }
+
   const statCards = [
-    { label: t('today_sales'), value: `${fmt(stats?.today_sales || 0)} TZS`, sub: `${stats?.today_transactions || 0} ${t('transactions')}`, icon: <ShoppingCart />, color: 'var(--accent)', bg: 'var(--accent-light)' },
-    { label: t('total_products'), value: fmt(stats?.total_products || 0), sub: `${stats?.low_stock_count || 0} ${t('low_stock')}`, icon: <Package />, color: 'var(--green)', bg: 'var(--green-light)' },
-    { label: t('total_debtors'), value: fmt(stats?.total_debtors || 0), sub: `${fmt(stats?.total_debt_amount || 0)} TZS`, icon: <Users />, color: 'var(--yellow)', bg: 'var(--yellow-light)' },
-    { label: t('low_stock'), value: fmt(stats?.low_stock_count || 0), sub: t('total_products') + ': ' + fmt(stats?.total_products || 0), icon: <AlertTriangle />, color: 'var(--red)', bg: 'var(--red-light)' },
+    { label: t('today_sales'), value: `${fmt(stats?.today_sales || 0)} TZS`, trend: <Trend pct={stats?.revenue_trend || 0} />, icon: <ShoppingCart />, color: 'var(--accent)', bg: 'var(--accent-light)' },
+    { label: t('transactions'), value: fmt(stats?.today_transactions || 0), trend: <Trend pct={stats?.tx_trend || 0} />, icon: <Receipt />, color: 'var(--text)', bg: 'var(--bg3)' },
+    { label: t('low_stock'), value: fmt(stats?.low_stock_count || 0), trend: <div className="stat-sub">{fmt(stats?.total_products || 0)} {t('total_products').toLowerCase()}</div>, icon: <AlertTriangle />, color: 'var(--red)', bg: 'var(--red-light)' },
+    { label: t('total_debtors'), value: `${fmt(stats?.total_debt_amount || 0)} TZS`, trend: <div className="stat-sub">{stats?.overdue_debts.length || 0} {t('overdue_debt').toLowerCase()}</div>, icon: <Users />, color: 'var(--yellow)', bg: 'var(--yellow-light)' },
   ]
 
   const tooltipStyle = { backgroundColor: 'var(--bg2)', border: '1px solid var(--border)', borderRadius: 8, color: 'var(--text)', fontSize: 13 }
@@ -220,6 +266,19 @@ export default function Dashboard() {
     { to: '/debts', label: t('debts'), icon: <CreditCard size={20} /> },
     { to: '/deals', label: t('deals'), icon: <Tag size={20} /> },
   ]
+
+  const alerts = [
+    ...(stats?.overdue_debts || []).map(d => ({
+      key: `debt-${d.id}`, severity: 'danger' as const, icon: <AlertTriangle size={16} />,
+      title: t('overdue_debt'), badge: 'Urgent',
+      desc: `${d.customer_name} ${t('debt_amount').toLowerCase()} ${fmt(d.balance)} TZS`
+    })),
+    ...(stats?.low_stock_items || []).map(p => ({
+      key: `stock-${p.id}`, severity: 'warning' as const, icon: <Package size={16} />,
+      title: t('low_stock'), badge: 'Warning',
+      desc: `${p.name} — ${p.stock_quantity} ${t('stock_left_suffix')}`
+    })),
+  ].slice(0, 5)
 
   return (
     <div>
@@ -236,7 +295,7 @@ export default function Dashboard() {
             <div className="stat-icon" style={{ background: c.bg, color: c.color }}>{c.icon}</div>
             <div className="stat-label">{c.label}</div>
             <div className="stat-value" style={{ color: c.color }}>{c.value}</div>
-            <div className="stat-sub">{c.sub}</div>
+            {c.trend}
           </div>
         ))}
       </div>
@@ -250,10 +309,13 @@ export default function Dashboard() {
         ))}
       </div>
 
-      <div className="charts-grid">
+      <div className="bento-grid">
         <div className="card">
-          <div className="card-title"><TrendingUp size={15} style={{ display: 'inline', marginRight: 6 }} />{t('weekly_revenue')}</div>
-          <ResponsiveContainer width="100%" height={200}>
+          <div className="card-header-row">
+            <div className="card-title" style={{ marginBottom: 0 }}><TrendingUp size={15} style={{ display: 'inline', marginRight: 6 }} />{t('weekly_revenue')}</div>
+            <Link to="/reports" className="card-header-link">{t('view_report')}</Link>
+          </div>
+          <ResponsiveContainer width="100%" height={220}>
             <BarChart data={stats?.week_revenue || []}>
               <XAxis dataKey="date" tick={{ fill: 'var(--text3)', fontSize: 11 }} axisLine={false} tickLine={false} />
               <YAxis tick={{ fill: 'var(--text3)', fontSize: 11 }} axisLine={false} tickLine={false} tickFormatter={v => fmt(v)} />
@@ -264,20 +326,80 @@ export default function Dashboard() {
         </div>
 
         <div className="card">
-          <div className="card-title"><Package size={15} style={{ display: 'inline', marginRight: 6 }} />{t('top_products')}</div>
-          {stats?.top_products.length === 0 ? (
-            <div className="empty-state"><Package /><p>{t('no_data')}</p></div>
+          <div className="card-title">{t('alerts_actions')}</div>
+          {alerts.length === 0 ? (
+            <div className="empty-state" style={{ padding: '32px 12px' }}>
+              <CheckCircle2 style={{ color: 'var(--green)' }} />
+              <p>{t('no_alerts')}</p>
+            </div>
           ) : (
-            <ResponsiveContainer width="100%" height={200}>
-              <BarChart data={stats?.top_products || []} layout="vertical">
-                <XAxis type="number" tick={{ fill: 'var(--text3)', fontSize: 10 }} axisLine={false} tickLine={false} tickFormatter={fmt} />
-                <YAxis type="category" dataKey="name" tick={{ fill: 'var(--text2)', fontSize: 11 }} axisLine={false} tickLine={false} width={90} />
-                <Tooltip contentStyle={tooltipStyle} formatter={(v: number) => [`${fmt(v)} TZS`, 'Revenue']} />
-                <Bar dataKey="revenue" fill="var(--green)" radius={[0, 4, 4, 0]} />
-              </BarChart>
-            </ResponsiveContainer>
+            <div className="alert-list">
+              {alerts.map(a => (
+                <div className={`alert-item severity-${a.severity}`} key={a.key}>
+                  <div className="alert-item-icon">{a.icon}</div>
+                  <div className="alert-item-body">
+                    <div className="alert-item-title-row">
+                      <span className="alert-item-title">{a.title}</span>
+                      <span className={`badge ${a.severity === 'danger' ? 'badge-red' : 'badge-yellow'}`}>{a.badge}</span>
+                    </div>
+                    <p className="alert-item-desc">{a.desc}</p>
+                  </div>
+                </div>
+              ))}
+            </div>
           )}
         </div>
+      </div>
+
+      <div className="card" style={{ marginTop: 16 }}>
+        <div className="card-header-row">
+          <div className="card-title" style={{ marginBottom: 0 }}><Package size={15} style={{ display: 'inline', marginRight: 6 }} />{t('top_selling_products')}</div>
+          <Link to="/products" className="card-header-link">{t('view_inventory')}</Link>
+        </div>
+        {stats?.top_products.length === 0 ? (
+          <div className="empty-state"><Package /><p>{t('no_data')}</p></div>
+        ) : (
+          <div className="table-wrapper">
+            <table>
+              <thead>
+                <tr>
+                  <th>{t('product_name')}</th>
+                  <th style={{ textAlign: 'right' }}>{t('selling_price')}</th>
+                  <th style={{ textAlign: 'right' }}>{t('sold')}</th>
+                </tr>
+              </thead>
+              <tbody>
+                {stats?.top_products.map(p => (
+                  <tr key={p.id || p.name}>
+                    <td>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                        {p.image_url ? (
+                          <img src={p.image_url} alt="" className="product-thumb" />
+                        ) : (
+                          <div className="product-thumb placeholder"><Package size={16} /></div>
+                        )}
+                        <span style={{ fontWeight: 600 }}>{p.name}</span>
+                      </div>
+                    </td>
+                    <td style={{ textAlign: 'right', fontFamily: 'var(--font-display)', fontWeight: 700 }}>{fmt(p.revenue / (p.qty || 1))} TZS</td>
+                    <td style={{ textAlign: 'right', fontWeight: 700, color: 'var(--green)' }}>{p.qty}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+
+      <div className="dashboard-fabs no-print">
+        <Link to="/products" className="btn btn-ghost fab-btn">
+          <Plus size={16} />
+          <span>{t('quick_add_product')}</span>
+        </Link>
+        <Link to="/sales" className="btn btn-primary fab-btn fab-btn-primary">
+          <ShoppingCart size={16} />
+          <span>{t('new_sale')}</span>
+        </Link>
       </div>
     </div>
   )

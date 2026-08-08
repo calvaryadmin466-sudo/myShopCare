@@ -8,7 +8,7 @@ import { offlineSync } from '../lib/offlineSync'
 import {
   LayoutDashboard, Package, ShoppingCart, CreditCard,
   Tag, Settings, LogOut, X, Menu, Store, History, Moon, Sun, BarChart3, Receipt,
-  Building2, ChevronDown, Wifi, WifiOff, Building
+  Building2, ChevronDown, Wifi, WifiOff, Building, Home, Plus, MoreHorizontal
 } from 'lucide-react'
 import { ExpiryNotificationBell } from './ExpiryNotificationBell'
 
@@ -193,6 +193,28 @@ export default function Layout() {
           <Outlet />
         </div>
       </div>
+
+      <nav className="bottom-nav no-print">
+        <NavLink to="/" end className={({ isActive }) => `bottom-nav-item ${isActive ? 'active' : ''}`}>
+          <Home />
+          <span>{t('dashboard')}</span>
+        </NavLink>
+        <NavLink to="/products" className={({ isActive }) => `bottom-nav-item ${isActive ? 'active' : ''}`}>
+          <Package />
+          <span>{t('products')}</span>
+        </NavLink>
+        <NavLink to="/sales" className="bottom-nav-fab" aria-label={t('sales')}>
+          <Plus size={22} />
+        </NavLink>
+        <NavLink to="/sales-history" className={({ isActive }) => `bottom-nav-item ${isActive ? 'active' : ''}`}>
+          <History />
+          <span>{t('sales_history')}</span>
+        </NavLink>
+        <button className="bottom-nav-item" onClick={() => setSidebarOpen(true)}>
+          <MoreHorizontal />
+          <span>{t('more')}</span>
+        </button>
+      </nav>
     </div>
   )
 }
