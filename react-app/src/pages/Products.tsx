@@ -17,37 +17,6 @@ const EMPTY: Omit<Product, 'id' | 'shop_id' | 'created_at' | 'updated_at'> & Pic
 
 function fmt(n: number) { return new Intl.NumberFormat().format(n) }
 
-function TableSkeleton({ cols }: { cols: number }) {
-  return (
-    <div className="card" style={{ padding: 0, animation: 'pulse 1.5s ease-in-out infinite' }}>
-      <div className="table-wrapper">
-        <table>
-          <thead>
-            <tr>
-              {Array.from({ length: cols }).map((_, i) => (
-                <th key={i}>
-                  <div style={{ height: 12, background: 'var(--border)', borderRadius: 4, width: '60%' }} />
-                </th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {Array.from({ length: 5 }).map((_, i) => (
-              <tr key={i}>
-                {Array.from({ length: cols }).map((_, j) => (
-                  <td key={j}>
-                    <div style={{ height: 16, background: 'var(--border)', borderRadius: 4, width: j === 0 ? '70%' : '50%' }} />
-                  </td>
-                ))}
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-    </div>
-  )
-}
-
 export default function Products() {
   const { profile } = useAuth()
   const { currentBusiness, loading: businessLoading } = useBusiness()
@@ -202,93 +171,60 @@ export default function Products() {
         ))}
       </div>
 
-      {loading ? <TableSkeleton cols={8} /> : (
-        <div className="card" style={{ padding: 0 }}>
-          <div className="table-wrapper">
-            <table>
-              <thead>
-                <tr>
-                  <th>{t('product_name')}</th>
-                  <th>{t('sku')}</th>
-                  <th>{t('category')}</th>
-                  <th>{t('buying_price')}</th>
-                  <th>{t('selling_price')}</th>
-                  <th>{t('stock')}</th>
-                  <th>{t('expiry_date')}</th>
-                  <th>{t('status')}</th>
-                  <th>{t('actions')}</th>
-                </tr>
-              </thead>
-              <tbody>
-                {filtered.length === 0 ? (
-                  <tr><td colSpan={9}><div className="empty-state"><Package /><p>{t('no_data')}</p></div></td></tr>
-                ) : filtered.map(p => {
-                  const isLow = p.stock_quantity <= p.low_stock_threshold
-                  const isOut = p.stock_quantity === 0
+      {loading ? (
+        <div className="product-grid">
+          {Array.from({ length: 8 }).map((_, i) => (
+            <div key={i} className="product-tile skeleton" style={{ height: 210 }} />
+          ))}
+        </div>
+      ) : filtered.length === 0 ? (
+        <div className="card"><div className="empty-state"><Package /><p>{t('no_data')}</p></div></div>
+      ) : (
+        <div className="product-grid">
+          {filtered.map(p => {
+            const isLow = p.stock_quantity <= p.low_stock_threshold
+            const isOut = p.stock_quantity === 0
 
-                  // expiry logic
-                  const today = new Date(); today.setHours(0,0,0,0)
-                  const expDate = p.expiry_date ? (() => { const d = new Date(p.expiry_date + 'T00:00:00'); d.setHours(0,0,0,0); return d })() : null
-                  const daysLeft = expDate ? Math.round((expDate.getTime() - today.getTime()) / 86400000) : null
-                  const isExpired = daysLeft !== null && daysLeft < 0
-                  const isExpiringSoon = daysLeft !== null && daysLeft >= 0 && daysLeft <= (p.expiry_days_alert ?? 30)
+            // expiry logic
+            const today = new Date(); today.setHours(0,0,0,0)
+            const expDate = p.expiry_date ? (() => { const d = new Date(p.expiry_date + 'T00:00:00'); d.setHours(0,0,0,0); return d })() : null
+            const daysLeft = expDate ? Math.round((expDate.getTime() - today.getTime()) / 86400000) : null
+            const isExpired = daysLeft !== null && daysLeft < 0
+            const isExpiringSoon = daysLeft !== null && daysLeft >= 0 && daysLeft <= (p.expiry_days_alert ?? 30)
 
-                  return (
-                    <tr key={p.id}>
-                      <td>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                          {p.image_url
-                            ? <img src={p.image_url} alt={p.name} className="product-thumb" />
-                            : <div className="product-thumb placeholder"><Package size={16} /></div>}
-                          <div>
-                            <strong>{p.name}</strong>
-                            {p.description && <div style={{ color: 'var(--text3)', fontSize: '0.75rem' }}>{p.description}</div>}
-                          </div>
-                        </div>
-                      </td>
-                      <td style={{ color: 'var(--text3)', fontSize: '0.8rem' }}>{p.sku || '—'}</td>
-                      <td><span className="badge badge-blue">{p.category}</span></td>
-                      <td>{fmt(p.buying_price)} TZS</td>
-                      <td style={{ fontWeight: 600, color: 'var(--accent)' }}>{fmt(p.selling_price)} TZS</td>
-                      <td>{fmt(p.stock_quantity)} {p.unit}</td>
-                      <td>
-                        {!p.expiry_date ? (
-                          <span style={{ color: 'var(--text3)', fontSize: '0.8rem' }}>—</span>
-                        ) : (
-                          <div>
-                            <div style={{ fontSize: '0.8rem' }}>{new Date(p.expiry_date + 'T00:00:00').toLocaleDateString('sw-TZ')}</div>
-                            {isExpired && (
-                              <div style={{ fontSize: '0.7rem', color: 'var(--red)', fontWeight: 600, display: 'flex', alignItems: 'center', gap: 3, marginTop: 2 }}>
-                                <CalendarX size={11} />{t('expired')}
-                              </div>
-                            )}
-                            {isExpiringSoon && !isExpired && (
-                              <div style={{ fontSize: '0.7rem', color: '#f97316', fontWeight: 600, display: 'flex', alignItems: 'center', gap: 3, marginTop: 2 }}>
-                                <CalendarX size={11} />{daysLeft === 0 ? t('expires_today') : `${daysLeft}d`}
-                              </div>
-                            )}
-                          </div>
-                        )}
-                      </td>
-                      <td>
-                        {isOut ? <span className="badge badge-red">{t('out_of_stock')}</span>
-                          : isLow ? <span className="badge badge-yellow">Low: {p.stock_quantity}</span>
-                            : <span className="badge badge-green">{t('in_stock')}</span>}
-                        {isExpired && <div style={{ marginTop: 3 }}><span className="badge badge-red">{t('expired')}</span></div>}
-                        {isExpiringSoon && !isExpired && <div style={{ marginTop: 3 }}><span className="badge" style={{ background: 'rgba(249,115,22,0.12)', color: '#f97316' }}>{t('expiry_soon')}</span></div>}
-                      </td>
-                      <td>
-                        <div style={{ display: 'flex', gap: 6 }}>
-                          <button className="btn btn-ghost btn-sm" onClick={() => openEdit(p)}><Edit2 size={13} /></button>
-                          <button className="btn btn-danger btn-sm" onClick={() => deleteProduct(p.id)}><Trash2 size={13} /></button>
-                        </div>
-                      </td>
-                    </tr>
-                  )
-                })}
-              </tbody>
-            </table>
-          </div>
+            return (
+              <div key={p.id} className={`product-tile inventory-tile ${isLow ? 'low-stock' : ''}`} onClick={() => openEdit(p)}>
+                <div className="inventory-tile-media">
+                  {p.image_url
+                    ? <img src={p.image_url} alt={p.name} />
+                    : <div className="inventory-tile-placeholder"><Package size={26} /></div>}
+                  <div className="inventory-tile-actions" onClick={e => e.stopPropagation()}>
+                    <button className="icon-btn" onClick={() => openEdit(p)}><Edit2 size={13} /></button>
+                    <button className="icon-btn danger" onClick={() => deleteProduct(p.id)}><Trash2 size={13} /></button>
+                  </div>
+                  {isOut ? (
+                    <span className="badge badge-red inventory-tile-badge">{t('out_of_stock')}</span>
+                  ) : isLow ? (
+                    <span className="badge badge-yellow inventory-tile-badge">Low Stock</span>
+                  ) : null}
+                </div>
+                <div className="p-name">{p.name}</div>
+                <div className="p-cat">{p.category}{p.sku ? ` • ${p.sku}` : ''}</div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginTop: 2 }}>
+                  <span className="p-stock" style={isLow ? { color: 'var(--red)', fontWeight: 600 } : undefined}>
+                    {isLow ? `${fmt(p.stock_quantity)} / Min ${fmt(p.low_stock_threshold)}` : `${fmt(p.stock_quantity)} ${p.unit}`}
+                  </span>
+                  <span className="p-price">{fmt(p.selling_price)}</span>
+                </div>
+                {p.expiry_date && (isExpired || isExpiringSoon) && (
+                  <div style={{ fontSize: '0.7rem', fontWeight: 600, display: 'flex', alignItems: 'center', gap: 3, marginTop: 6, color: isExpired ? 'var(--red)' : '#f97316' }}>
+                    <CalendarX size={11} />
+                    {isExpired ? t('expired') : (daysLeft === 0 ? t('expires_today') : `${daysLeft}d`)}
+                  </div>
+                )}
+              </div>
+            )
+          })}
         </div>
       )}
 

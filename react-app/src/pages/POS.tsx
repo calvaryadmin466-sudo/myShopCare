@@ -6,7 +6,7 @@ import { useBusiness } from '../contexts/BusinessContext'
 import { systemNotifications } from '../lib/systemNotifications'
 import { offlineSync } from '../lib/offlineSync'
 import type { Product, CartItem, Sale, Worker, Deal } from '../types'
-import { Search, Trash2, X, Printer, ShoppingCart as CartIcon, Package, WifiOff } from 'lucide-react'
+import { Search, Trash2, X, Printer, ShoppingCart as CartIcon, Plus, WifiOff } from 'lucide-react'
 
 function fmt(n: number) { return new Intl.NumberFormat().format(Math.round(n)) }
 
@@ -297,24 +297,25 @@ export default function POS() {
           </div>
 
           {loading ? <GridSkeleton /> : (
-            <div className="pos-product-list">
-              {filtered.map(p => (
-                <div key={p.id} className={`pos-product-row ${p.stock_quantity === 0 ? 'out-of-stock' : ''}`} onClick={() => p.stock_quantity > 0 && addToCart(p)}>
-                  {p.image_url
-                    ? <img src={p.image_url} alt={p.name} className="pos-product-thumb" />
-                    : <div className="pos-product-thumb placeholder"><Package size={18} /></div>}
-                  <div className="pos-product-main">
-                    <div className="pos-product-name">{p.name}</div>
-                    <div className="pos-product-meta">
-                      {p.sku && <span>{p.sku}</span>}
-                      <span>{p.category}</span>
-                      <span>{fmt(p.stock_quantity)} {p.unit}</span>
-                    </div>
-                    {p.description && <div className="pos-product-desc">{p.description}</div>}
+            <div className="product-grid">
+              {filtered.map(p => {
+                const inCart = cart.find(c => c.id === p.id)
+                const isOut = p.stock_quantity === 0
+                return (
+                  <div key={p.id} className={`product-tile pos-tile ${isOut ? 'out-of-stock' : ''}`} onClick={() => !isOut && addToCart(p)}>
+                    {inCart && <span className="tile-cart-qty">{inCart.qty}</span>}
+                    <div className="p-cat"><span>{p.category}</span></div>
+                    <div className="p-name">{p.name}</div>
+                    <div className="p-stock">{isOut ? t('out_of_stock') : `${fmt(p.stock_quantity)} ${p.unit}`}</div>
+                    <div className="p-price">{fmt(p.selling_price)} TZS</div>
+                    {!isOut && (
+                      <button type="button" className="tile-add-btn" onClick={e => { e.stopPropagation(); addToCart(p) }}>
+                        <Plus size={16} />
+                      </button>
+                    )}
                   </div>
-                  <div className="pos-product-price">{fmt(p.selling_price)} TZS</div>
-                </div>
-              ))}
+                )
+              })}
             </div>
           )}
         </div>
@@ -401,6 +402,12 @@ export default function POS() {
                   <label style={{ fontSize: '0.78rem' }}>{t('amount_paid')} (TZS)</label>
                   <input type="number" min="0" value={payment.amount_paid || ''} onChange={e => setPayment(p => ({ ...p, amount_paid: Math.max(0, +e.target.value || 0) }))}
                     placeholder={fmt(total)} />
+                  <div className="quick-cash-row">
+                    <button type="button" className="quick-cash-btn" onClick={() => setPayment(p => ({ ...p, amount_paid: total }))}>{t('exact') || 'Exact'}</button>
+                    {[5000, 10000, 20000].filter(v => v > total).map(v => (
+                      <button key={v} type="button" className="quick-cash-btn" onClick={() => setPayment(p => ({ ...p, amount_paid: v }))}>{fmt(v)}</button>
+                    ))}
+                  </div>
                 </div>
                 {payment.amount_paid > 0 && (
                   <div className="summary-row" style={{ color: 'var(--green)', fontWeight: 600 }}>
@@ -410,30 +417,10 @@ export default function POS() {
               </>
             )}
 
-            <div style={{ marginTop: 16, padding: '12px 0', borderTop: '1px solid var(--border)', position: 'relative', zIndex: 1000 }}>
+            <div style={{ marginTop: 16, paddingTop: 12, borderTop: '1px solid var(--border)' }}>
               <button
                 type="button"
-                className="btn btn-primary btn-full btn-lg"
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  width: '100%',
-                  height: '56px',
-                  fontSize: '1.1rem',
-                  fontWeight: 700,
-                  padding: '14px 24px',
-                  visibility: 'visible',
-                  opacity: 1,
-                  cursor: cart.length === 0 ? 'not-allowed' : 'pointer',
-                  backgroundColor: cart.length === 0 ? '#ccc' : 'var(--accent)',
-                  color: 'white',
-                  border: 'none',
-                  borderRadius: 'var(--radius)',
-                  position: 'relative',
-                  zIndex: 1000,
-                  boxShadow: '0 4px 12px rgba(0,0,0,0.15)'
-                }}
+                className="btn btn-primary btn-full pos-checkout-btn"
                 onClick={processSale}
                 disabled={cart.length === 0 || processing}
               >

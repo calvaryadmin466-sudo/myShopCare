@@ -203,6 +203,17 @@ export default function Debts() {
         <button className="btn btn-primary" onClick={() => setModal('add')}><Plus size={16} />{t('add_debt')}</button>
       </div>
 
+      <div className="stats-grid" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))' }}>
+        <div className="glass-panel">
+          <div className="stat-label">{t('balance')} — {t('all_debts')}</div>
+          <div className="stat-value" style={{ color: 'var(--red)' }}>{fmt(debts.reduce((s, d) => s + d.balance, 0))} TZS</div>
+        </div>
+        <div className="glass-panel">
+          <div className="stat-label">{t('customer_name_')} — {t('active')}</div>
+          <div className="stat-value">{fmt(debts.filter(d => d.balance > 0).length)}</div>
+        </div>
+      </div>
+
       <div className="filters" style={{ marginBottom: 16 }}>
         <div className="search-bar" style={{ flex: 1, maxWidth: 300 }}>
           <Search />
@@ -236,8 +247,13 @@ export default function Debts() {
                 ) : filtered.map(d => (
                   <tr key={d.id}>
                     <td>
-                      <strong>{d.customer_name}</strong>
-                      {d.customer_phone && <div style={{ fontSize: '0.75rem', color: 'var(--text3)' }}>{d.customer_phone}</div>}
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                        <div className="avatar-initials sm">{d.customer_name.trim().split(/\s+/).slice(0, 2).map(w => w[0]?.toUpperCase()).join('')}</div>
+                        <div>
+                          <strong>{d.customer_name}</strong>
+                          {d.customer_phone && <div style={{ fontSize: '0.75rem', color: 'var(--text3)' }}>{d.customer_phone}</div>}
+                        </div>
+                      </div>
                     </td>
                     <td>{fmt(d.original_amount)} TZS</td>
                     <td>{fmt(d.amount_paid)} TZS</td>
@@ -317,6 +333,10 @@ export default function Debts() {
               <div className="form-group">
                 <label>{t('payment_amount')} * (TZS)</label>
                 <input type="number" min="0" max={selected.balance} value={payForm.amount || ''} onChange={e => setPayForm(f => ({ ...f, amount: Math.max(0, +e.target.value || 0) }))} />
+                <div className="quick-cash-row">
+                  <button type="button" className="quick-cash-btn" onClick={() => setPayForm(f => ({ ...f, amount: selected.balance }))}>{t('full') || 'Full'}</button>
+                  <button type="button" className="quick-cash-btn" onClick={() => setPayForm(f => ({ ...f, amount: Math.round(selected.balance / 2) }))}>{t('half') || 'Half'}</button>
+                </div>
               </div>
               <div className="form-group">
                 <label>{t('payment_method')}</label>

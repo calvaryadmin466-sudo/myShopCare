@@ -12,7 +12,7 @@ const COLOR_OPTIONS = [
 ]
 
 export default function BusinessManagement() {
-  const { businesses, currentBusiness, createBusiness, updateBusiness, deleteBusiness, refreshBusinesses } = useBusiness()
+  const { businesses, currentBusiness, setCurrentBusiness, createBusiness, updateBusiness, deleteBusiness, refreshBusinesses } = useBusiness()
   const { user } = useAuth()
   const { t, lang } = useLang()
 
@@ -208,7 +208,12 @@ export default function BusinessManagement() {
                 </div>
 
                 <div className="biz-actions">
-                  <button className="btn btn-ghost" onClick={() => openEditModal(business)}><Edit2 size={14} />{t('edit_business')}</button>
+                  <div className="biz-actions-row">
+                    <button className="btn btn-ghost btn-sm" onClick={() => openEditModal(business)}><Edit2 size={13} />{t('edit_business')}</button>
+                    {!isActive && (
+                      <button className="btn btn-primary btn-sm" onClick={() => setCurrentBusiness(business)}>{t('switch_business') || 'Switch'}</button>
+                    )}
+                  </div>
                   <div className="biz-actions-row">
                     <button className="btn btn-ghost btn-sm" onClick={() => { setEditingBusiness(business); setError(null); setModal('settings') }}><Settings size={13} />{t('settings')}</button>
                     <button className="btn btn-ghost btn-sm" onClick={() => { setEditingBusiness(business); setError(null); setModal('logo') }}><ImageIcon size={13} />{t('upload_logo')}</button>
@@ -218,6 +223,10 @@ export default function BusinessManagement() {
               </div>
             )
           })}
+          <div className="card card-dashed" onClick={openCreateModal}>
+            <Plus size={28} />
+            <span style={{ fontWeight: 600, fontSize: '0.85rem' }}>{t('add_business')}</span>
+          </div>
         </div>
       )}
 

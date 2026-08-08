@@ -37,18 +37,36 @@ export default function AuthPage() {
 
   return (
     <div className="auth-wrapper">
+      <div className="auth-lang-toggle">
+        <div className="lang-toggle">
+          <button className={`lang-btn ${lang === 'sw' ? 'active' : ''}`} onClick={() => setLang('sw')}>SW</button>
+          <button className={`lang-btn ${lang === 'en' ? 'active' : ''}`} onClick={() => setLang('en')}>EN</button>
+        </div>
+      </div>
       <div className="auth-card">
         <div className="auth-logo">
-          <ShoppingBag size={36} color="var(--accent)" style={{ marginBottom: 8 }} />
+          <div className="auth-logo-badge">
+            <ShoppingBag size={30} color="var(--accent)" />
+          </div>
           <h1>myShopCare</h1>
           <p>{mode === 'login' ? t('welcome_back') : t('create_shop')}</p>
         </div>
 
-        <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 16 }}>
-          <div className="lang-toggle">
-            <button className={`lang-btn ${lang === 'sw' ? 'active' : ''}`} onClick={() => setLang('sw')}>SW</button>
-            <button className={`lang-btn ${lang === 'en' ? 'active' : ''}`} onClick={() => setLang('en')}>EN</button>
-          </div>
+        <div className="auth-tabs">
+          <button
+            type="button"
+            className={`tab-btn ${mode === 'login' ? 'active' : ''}`}
+            onClick={() => { setMode('login'); setError(''); setSuccess('') }}
+          >
+            {t('login')}
+          </button>
+          <button
+            type="button"
+            className={`tab-btn ${mode === 'register' ? 'active' : ''}`}
+            onClick={() => { setMode('register'); setError(''); setSuccess('') }}
+          >
+            {t('register')}
+          </button>
         </div>
 
         {error && <div className="alert alert-error">{error}</div>}
@@ -79,16 +97,6 @@ export default function AuthPage() {
             {loading ? t('loading') : (mode === 'login' ? t('login') : t('register'))}
           </button>
         </form>
-
-        <p style={{ textAlign: 'center', marginTop: 16, fontSize: '0.85rem', color: 'var(--text2)' }}>
-          {mode === 'login' ? t('no_account') : t('already_account')}{' '}
-          <span
-            style={{ color: 'var(--accent)', cursor: 'pointer', fontWeight: 600 }}
-            onClick={() => { setMode(m => m === 'login' ? 'register' : 'login'); setError(''); setSuccess('') }}
-          >
-            {mode === 'login' ? t('register') : t('login')}
-          </span>
-        </p>
       </div>
     </div>
   )

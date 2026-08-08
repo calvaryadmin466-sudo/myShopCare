@@ -4,7 +4,7 @@ import { useAuth } from '../contexts/AuthContext'
 import { useLang } from '../contexts/LangContext'
 import { useBusiness } from '../contexts/BusinessContext'
 import type { Deal } from '../types'
-import { Plus, Tag, Trash2, X, Check, Calendar } from 'lucide-react'
+import { Plus, Tag, Trash2, X, Search } from 'lucide-react'
 
 function todayStr() { return new Date().toISOString().slice(0, 10) }
 
@@ -57,6 +57,8 @@ export default function Deals() {
   const { currentBusiness } = useBusiness()
   const [deals, setDeals] = useState<Deal[]>([])
   const [loading, setLoading] = useState(true)
+  const [search, setSearch] = useState('')
+  const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'expired' | 'inactive'>('all')
   const [modal, setModal] = useState(false)
   const [form, setForm] = useState({ ...EMPTY })
   const [saving, setSaving] = useState(false)
@@ -107,11 +109,44 @@ export default function Deals() {
     load()
   }
 
+  const filtered = deals.filter(d => {
+    const expired = d.end_date < todayStr()
+    const matchSearch = d.name.toLowerCase().includes(search.toLowerCase())
+    const matchStatus = statusFilter === 'all' ? true
+      : statusFilter === 'expired' ? expired
+      : statusFilter === 'inactive' ? (!d.is_active && !expired)
+      : (d.is_active && !expired)
+    return matchSearch && matchStatus
+  })
+
   return (
     <div>
       <div className="page-header">
         <h2>🏷️ {t('deals')}</h2>
         <button className="btn btn-primary" onClick={() => { setForm({ ...EMPTY }); setFormError(''); setModal(true) }}><Plus size={16} />{t('add_deal')}</button>
+      </div>
+
+      <div className="stats-grid" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))' }}>
+        <div className="stat-card">
+          <div className="stat-label">{t('active_deals')}</div>
+          <div className="stat-value" style={{ color: 'var(--green)' }}>{deals.filter(d => d.is_active && d.end_date >= todayStr()).length}</div>
+        </div>
+        <div className="stat-card">
+          <div className="stat-label">{t('usage')}</div>
+          <div className="stat-value" style={{ color: 'var(--accent)' }}>{deals.reduce((s, d) => s + (d.usage_count || 0), 0)}</div>
+        </div>
+      </div>
+
+      <div className="filters" style={{ marginBottom: 16 }}>
+        <div className="search-bar" style={{ flex: 1, maxWidth: 300 }}>
+          <Search />
+          <input value={search} onChange={e => setSearch(e.target.value)} placeholder={t('search')} />
+        </div>
+        {(['all', 'active', 'expired', 'inactive'] as const).map(s => (
+          <button key={s} className={`filter-chip ${statusFilter === s ? 'active' : ''}`} onClick={() => setStatusFilter(s)}>
+            {s === 'all' ? t('all') : s === 'active' ? t('active_deals') : s === 'expired' ? t('expired') : 'Inactive'}
+          </button>
+        ))}
       </div>
 
       {loading ? <TableSkeleton cols={8} /> : (
@@ -131,9 +166,9 @@ export default function Deals() {
                 </tr>
               </thead>
               <tbody>
-                {deals.length === 0 ? (
+                {filtered.length === 0 ? (
                   <tr><td colSpan={8}><div className="empty-state"><Tag /><p>{t('no_data')}</p></div></td></tr>
-                ) : deals.map(d => {
+                ) : filtered.map(d => {
                   const expired = d.end_date < todayStr()
                   return (
                     <tr key={d.id} style={{ opacity: expired || !d.is_active ? 0.6 : 1 }}>

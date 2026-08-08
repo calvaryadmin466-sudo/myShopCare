@@ -5,7 +5,10 @@ import { useAuth } from '../contexts/AuthContext'
 import { useLang } from '../contexts/LangContext'
 import type { Expense, Sale, SaleItem } from '../types'
 import { BarChart3, Download, Printer, RefreshCw, FileText } from 'lucide-react'
+import { LineChart, Line, PieChart, Pie, Cell, XAxis, YAxis, Tooltip, Legend, ResponsiveContainer, CartesianGrid } from 'recharts'
 import * as XLSX from 'xlsx'
+
+const DONUT_COLORS = ['var(--accent)', 'var(--green)', 'var(--blue)', 'var(--yellow)', 'var(--red)']
 
 type Period = 'week' | 'month' | 'year' | 'custom' | 'all'
 type View = 'product' | 'category' | 'order'
@@ -357,6 +360,32 @@ export default function Reports() {
     return Array.from(m.values()).sort((a, b) => b.gross - a.gross)
   }, [rows])
 
+  // Bucket revenue/expenses by day (short ranges) or by month (year/all/long
+  // custom ranges) so the trend line stays readable instead of plotting
+  // hundreds of individual daily points for a full-year view.
+  const trendSeries = useMemo(() => {
+    const spanDays = (end.getTime() - start.getTime()) / 86400000
+    const byMonth = spanDays > 62
+    const keyOf = (iso: string) => {
+      const d = new Date(iso)
+      return byMonth ? `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}` : toDateInput(d)
+    }
+    const buckets = new Map<string, { date: string; revenue: number; expenses: number }>()
+    for (const r of rows) {
+      const key = keyOf(r.payment_date)
+      const cur = buckets.get(key) || { date: key, revenue: 0, expenses: 0 }
+      cur.revenue += r.revenue
+      buckets.set(key, cur)
+    }
+    for (const e of expenses) {
+      const key = keyOf(e.expense_date || e.created_at)
+      const cur = buckets.get(key) || { date: key, revenue: 0, expenses: 0 }
+      cur.expenses += Number(e.amount || 0)
+      buckets.set(key, cur)
+    }
+    return Array.from(buckets.values()).sort((a, b) => a.date.localeCompare(b.date))
+  }, [rows, expenses, start, end])
+
   const byOrder = useMemo(() => {
     const m = new Map<string, { payment_date: string; payment_method: string; source: string; source_id: string; sale_id: string; customer: string; revenue: number; cogs: number; gross: number }>()
     for (const r of rows) {
@@ -442,6 +471,8 @@ export default function Reports() {
     { v: 'other', l: t('other') },
   ]
 
+  const tooltipStyle = { backgroundColor: 'var(--bg2)', border: '1px solid var(--border)', borderRadius: 8, color: 'var(--text)', fontSize: 13 }
+
   const views: { v: View; l: string }[] = [
     { v: 'product', l: t('by_product') },
     { v: 'category', l: t('by_category') },
@@ -524,6 +555,52 @@ export default function Reports() {
           <div className="stat-label">{t('net_profit')}</div>
           <div className="stat-value" style={{ color: totals.net >= 0 ? 'var(--green)' : 'var(--red)' }}>{fmt(totals.net)} TZS</div>
           <div className="stat-sub">{t('gross_profit')} - {t('expenses')}</div>
+        </div>
+      </div>
+
+      <div className="charts-grid no-print">
+        <div className="card">
+          <div className="card-title">{t('revenue')} vs {t('expenses')}</div>
+          <ResponsiveContainer width="100%" height={240}>
+            <LineChart data={trendSeries}>
+              <CartesianGrid stroke="var(--border)" strokeDasharray="3 3" vertical={false} />
+              <XAxis dataKey="date" tick={{ fill: 'var(--text3)', fontSize: 11 }} axisLine={false} tickLine={false} />
+              <YAxis tick={{ fill: 'var(--text3)', fontSize: 11 }} axisLine={false} tickLine={false} tickFormatter={v => fmt(v)} />
+              <Tooltip contentStyle={tooltipStyle} formatter={(v: number) => `${fmt(v)} TZS`} />
+              <Legend wrapperStyle={{ fontSize: 12 }} />
+              <Line type="monotone" dataKey="revenue" name={t('revenue')} stroke="var(--accent)" strokeWidth={2} dot={false} />
+              <Line type="monotone" dataKey="expenses" name={t('expenses')} stroke="var(--red)" strokeWidth={2} strokeDasharray="5 4" dot={false} />
+            </LineChart>
+          </ResponsiveContainer>
+        </div>
+
+        <div className="card">
+          <div className="card-title">{t('by_category')}</div>
+          {byCategory.length === 0 ? (
+            <div className="empty-state"><BarChart3 /><p>{t('no_data')}</p></div>
+          ) : (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 16, flexWrap: 'wrap' }}>
+              <div style={{ flex: '1 1 160px', minWidth: 160 }}>
+              <ResponsiveContainer width="100%" height={200}>
+                <PieChart>
+                  <Pie data={byCategory} dataKey="revenue" nameKey="category" innerRadius={55} outerRadius={80} paddingAngle={2}>
+                    {byCategory.map((_, i) => <Cell key={i} fill={DONUT_COLORS[i % DONUT_COLORS.length]} />)}
+                  </Pie>
+                  <Tooltip contentStyle={tooltipStyle} formatter={(v: number) => `${fmt(v)} TZS`} />
+                </PieChart>
+              </ResponsiveContainer>
+              </div>
+              <div className="donut-legend" style={{ flex: '1 1 140px' }}>
+                {byCategory.slice(0, 6).map((c, i) => (
+                  <div key={c.category} className="donut-legend-item">
+                    <span className="donut-legend-dot" style={{ background: DONUT_COLORS[i % DONUT_COLORS.length] }} />
+                    <span>{c.category}</span>
+                    <span className="donut-legend-value">{fmt(c.revenue)}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
       </div>
 

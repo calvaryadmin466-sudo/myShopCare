@@ -5,7 +5,7 @@ import { useAuth } from '../contexts/AuthContext'
 import { useLang } from '../contexts/LangContext'
 import { useBusiness } from '../contexts/BusinessContext'
 import type { Sale, SaleItem } from '../types'
-import { BarChart3, Calendar, Download, Eye, FileText, Printer, Search, X } from 'lucide-react'
+import { BarChart3, Calendar, ChevronDown, Download, FileText, Printer, Search } from 'lucide-react'
 import * as XLSX from 'xlsx'
 
 type SaleWithItems = Sale & { sale_items?: SaleItem[] }
@@ -100,7 +100,7 @@ export default function SalesHistory() {
     ? 'all'
     : initialFrom
       ? 'custom'
-      : (searchParams.get('filter') as DateFilter) || 'today'
+      : (searchParams.get('filter') as DateFilter) || 'week'
   const [dateFilter, setDateFilter] = useState<DateFilter>(initialFilter)
   const [customFrom, setCustomFrom] = useState(initialFrom || toDateInput(startOfToday()))
   const [customTo, setCustomTo] = useState(initialTo || initialFrom || toDateInput(startOfToday()))
@@ -438,57 +438,62 @@ export default function SalesHistory() {
         </select>
       </div>
 
-      {loading ? <TableSkeleton /> : (
-        <div className="card" style={{ padding: 0 }}>
-          <div className="table-wrapper">
-            <table>
-              <thead>
-                <tr>
-                  <th>{t('date')}</th>
-                  <th>{t('sold_by')}</th>
-                  <th>{t('customer')}</th>
-                  <th>{t('items')}</th>
-                  <th>{t('payment_method')}</th>
-                  <th>{t('status')}</th>
-                  <th>{t('total')}</th>
-                  <th>{t('actions')}</th>
-                </tr>
-              </thead>
-              <tbody>
-                {filtered.length === 0 ? (
-                  <tr><td colSpan={8}><div className="empty-state"><FileText /><p>{t('no_sales_history')}</p></div></td></tr>
-                ) : filtered.map(s => (
-                  <tr key={s.id}>
-                    <td>
-                      <strong>{new Date(s.created_at).toLocaleDateString('sw-TZ')}</strong>
-                      <div style={{ fontSize: '0.75rem', color: 'var(--text3)' }}>{new Date(s.created_at).toLocaleTimeString('sw-TZ', { hour: '2-digit', minute: '2-digit' })}</div>
-                    </td>
-                    <td>
-                      <strong>{s.cashier_name || t('unknown_seller')}</strong>
-                      {!s.cashier_name && <div style={{ fontSize: '0.75rem', color: 'var(--text3)' }}>{s.cashier_id.slice(0, 8)}</div>}
-                    </td>
-                    <td>
-                      <strong>{s.customer_name || t('walk_in_customer')}</strong>
-                      {s.customer_phone && <div style={{ fontSize: '0.75rem', color: 'var(--text3)' }}>{s.customer_phone}</div>}
-                    </td>
-                    <td>
-                      <span className="badge badge-accent">{(s.items || []).length} {t('items')}</span>
-                    </td>
-                    <td>{t(s.payment_method)}</td>
-                    <td>
-                      {s.payment_status === 'paid' ? <span className="badge badge-green">{t('paid')}</span>
-                        : s.payment_status === 'partial' ? <span className="badge badge-yellow">{t('partial')}</span>
-                          : <span className="badge badge-red">{t('pending')}</span>}
-                    </td>
-                    <td style={{ fontWeight: 700, color: 'var(--accent)' }}>{fmt(Number(s.total))} TZS</td>
-                    <td>
-                      <button className="btn btn-ghost btn-sm" onClick={() => setSelected(s)}><Eye size={13} />{t('view')}</button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+      {loading ? <TableSkeleton /> : filtered.length === 0 ? (
+        <div className="card"><div className="empty-state"><FileText /><p>{t('no_sales_history')}</p></div></div>
+      ) : (
+        <div>
+          {filtered.map(s => {
+            const isOpen = selected?.id === s.id
+            const initials = (s.customer_name || s.cashier_name || '??').trim().split(/\s+/).slice(0, 2).map(w => w[0]?.toUpperCase()).join('')
+            return (
+              <div key={s.id} className={`accordion-row ${isOpen ? 'open' : ''}`}>
+                <div className="accordion-row-head" onClick={() => setSelected(isOpen ? null : s)}>
+                  <div className="txn-row-main">
+                    <div className="avatar-initials">{initials}</div>
+                    <div className="txn-row-meta">
+                      <div className="txn-row-title">{s.customer_name || t('walk_in_customer')}</div>
+                      <div className="txn-row-sub">
+                        <span>{new Date(s.created_at).toLocaleDateString('sw-TZ')} · {new Date(s.created_at).toLocaleTimeString('sw-TZ', { hour: '2-digit', minute: '2-digit' })}</span>
+                        <span className="badge badge-accent">{(s.items || []).length} {t('items')}</span>
+                        <span className="badge badge-blue">{t(s.payment_method)}</span>
+                        {s.payment_status === 'paid' ? <span className="badge badge-green">{t('paid')}</span>
+                          : s.payment_status === 'partial' ? <span className="badge badge-yellow">{t('partial')}</span>
+                            : <span className="badge badge-red">{t('pending')}</span>}
+                      </div>
+                    </div>
+                    <div className="txn-row-amount"><span className="amt">{fmt(Number(s.total))} TZS</span></div>
+                    <ChevronDown size={18} className="txn-row-chevron" />
+                  </div>
+                </div>
+                {isOpen && (
+                  <div className="accordion-row-body">
+                    <div className="receipt-detail">
+                      <div className="summary-row"><span>{t('sold_by')}</span><span>{s.cashier_name || t('unknown_seller')}</span></div>
+                      {s.customer_phone && <div className="summary-row"><span>{t('customer_phone')}</span><span>{s.customer_phone}</span></div>}
+                      <div className="divider" />
+                      <div className="receipt-items">
+                        {(s.items || []).map(item => (
+                          <div key={item.id} className="receipt-row">
+                            <span>{item.product_name} x{fmt(Number(item.quantity))}</span>
+                            <span>{fmt(Number(item.total_price))} TZS</span>
+                          </div>
+                        ))}
+                      </div>
+                      <div className="receipt-row"><span>{t('subtotal')}</span><span>{fmt(Number(s.subtotal))} TZS</span></div>
+                      {Number(s.discount) > 0 && <div className="receipt-row" style={{ color: 'var(--red)' }}><span>{t('discount')}</span><span>-{fmt(Number(s.discount))} TZS</span></div>}
+                      <div className="receipt-row receipt-total"><span>{t('total')}</span><span>{fmt(Number(s.total))} TZS</span></div>
+                      <div className="receipt-row"><span>{t('amount_paid')}</span><span>{fmt(Number(s.amount_paid))} TZS</span></div>
+                      <div className="receipt-row"><span>{t('change')}</span><span>{fmt(Number(s.change_given))} TZS</span></div>
+                    </div>
+                    <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>
+                      <button className="btn btn-ghost btn-sm" onClick={e => { e.stopPropagation(); printSale(s) }}><Printer size={14} />{t('print')}</button>
+                      <button className="btn btn-primary btn-sm" onClick={e => { e.stopPropagation(); exportSaleExcel(s) }}><Download size={14} />{t('export_excel')}</button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )
+          })}
         </div>
       )}
 
@@ -512,42 +517,6 @@ export default function SalesHistory() {
           >
             Next
           </button>
-        </div>
-      )}
-
-      {selected && (
-        <div className="modal-overlay" onClick={() => setSelected(null)}>
-          <div className="modal" onClick={e => e.stopPropagation()}>
-            <div className="modal-header">
-              <h3>{t('sale_details')}</h3>
-              <div style={{ display: 'flex', gap: 6 }}>
-                <button className="btn btn-ghost btn-sm" onClick={() => printSale(selected)}><Printer size={14} />{t('print')}</button>
-                <button className="btn btn-primary btn-sm" onClick={() => exportSaleExcel(selected)}><Download size={14} />{t('export_excel')}</button>
-                <button className="btn btn-ghost btn-sm" onClick={() => setSelected(null)}><X size={16} /></button>
-              </div>
-            </div>
-            <div className="modal-body">
-              <div className="summary-row"><span>{t('date')}</span><span>{new Date(selected.created_at).toLocaleString('sw-TZ')}</span></div>
-              <div className="summary-row"><span>{t('sold_by')}</span><span>{selected.cashier_name || t('unknown_seller')}</span></div>
-              <div className="summary-row"><span>{t('customer')}</span><span>{selected.customer_name || t('walk_in_customer')}</span></div>
-              {selected.customer_phone && <div className="summary-row"><span>{t('customer_phone')}</span><span>{selected.customer_phone}</span></div>}
-              <div className="summary-row"><span>{t('payment_method')}</span><span>{t(selected.payment_method)}</span></div>
-              <div className="divider" />
-              <div className="receipt-items">
-                {(selected.items || []).map(item => (
-                  <div key={item.id} className="receipt-row">
-                    <span>{item.product_name} x{fmt(Number(item.quantity))}</span>
-                    <span>{fmt(Number(item.total_price))} TZS</span>
-                  </div>
-                ))}
-              </div>
-              <div className="receipt-row"><span>{t('subtotal')}</span><span>{fmt(Number(selected.subtotal))} TZS</span></div>
-              {Number(selected.discount) > 0 && <div className="receipt-row" style={{ color: 'var(--red)' }}><span>{t('discount')}</span><span>-{fmt(Number(selected.discount))} TZS</span></div>}
-              <div className="receipt-row receipt-total"><span>{t('total')}</span><span>{fmt(Number(selected.total))} TZS</span></div>
-              <div className="receipt-row"><span>{t('amount_paid')}</span><span>{fmt(Number(selected.amount_paid))} TZS</span></div>
-              <div className="receipt-row"><span>{t('change')}</span><span>{fmt(Number(selected.change_given))} TZS</span></div>
-            </div>
-          </div>
         </div>
       )}
     </div>

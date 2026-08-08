@@ -24,6 +24,13 @@ function dateInputToIso(d: string) {
   return new Date(`${d}T00:00:00`).toISOString()
 }
 
+const CATEGORY_BADGE_COLORS = ['badge-accent', 'badge-blue', 'badge-green', 'badge-yellow', 'badge-red']
+function categoryBadgeClass(category: string) {
+  let hash = 0
+  for (let i = 0; i < category.length; i++) hash = (hash * 31 + category.charCodeAt(i)) | 0
+  return CATEGORY_BADGE_COLORS[Math.abs(hash) % CATEGORY_BADGE_COLORS.length]
+}
+
 type FormState = {
   id?: string
   category: string
@@ -211,7 +218,7 @@ export default function Expenses() {
                     <strong>{new Date(e.expense_date || e.created_at).toLocaleDateString('sw-TZ')}</strong>
                     <div style={{ fontSize: '0.75rem', color: 'var(--text3)' }}>{new Date(e.expense_date || e.created_at).toLocaleTimeString('sw-TZ', { hour: '2-digit', minute: '2-digit' })}</div>
                   </td>
-                  <td><span className="badge badge-accent">{e.category}</span></td>
+                  <td><span className={`badge ${categoryBadgeClass(e.category)}`}>{e.category}</span></td>
                   <td style={{ maxWidth: 360, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{e.description || '—'}</td>
                   <td>{t(e.payment_method)}</td>
                   <td style={{ fontWeight: 700, color: 'var(--red)' }}>{fmt(Number(e.amount))} TZS</td>
@@ -248,6 +255,10 @@ export default function Expenses() {
           </button>
         </div>
       )}
+
+      <button type="button" className="page-fab" onClick={openAdd} aria-label={t('add_expense')}>
+        <Plus size={22} />
+      </button>
 
       {modal && (
         <div className="modal-overlay" onClick={() => !saving && setModal(false)}>

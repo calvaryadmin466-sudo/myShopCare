@@ -158,9 +158,26 @@ body {
   display: flex;
   align-items: center;
   justify-content: center;
-  background: radial-gradient(ellipse at 50% 0%, rgba(108,99,255,0.15) 0%, transparent 70%), var(--bg);
+  position: relative;
+  overflow: hidden;
+  background:
+    radial-gradient(circle, var(--border) 1px, transparent 1px) 0 0 / 22px 22px,
+    var(--bg);
   padding: 20px;
 }
+.auth-wrapper::before,
+.auth-wrapper::after {
+  content: '';
+  position: absolute;
+  width: 320px; height: 320px;
+  border-radius: 50%;
+  filter: blur(90px);
+  opacity: 0.35;
+  pointer-events: none;
+}
+.auth-wrapper::before { top: -80px; left: -80px; background: var(--accent); }
+.auth-wrapper::after { bottom: -100px; right: -100px; background: var(--green); }
+.auth-lang-toggle { position: absolute; top: 20px; right: 20px; z-index: 1; }
 .auth-card {
   background: var(--bg2);
   border: 1px solid var(--border);
@@ -169,10 +186,21 @@ body {
   width: 100%;
   max-width: 420px;
   box-shadow: var(--shadow);
+  position: relative;
+  z-index: 1;
 }
-.auth-logo { text-align: center; margin-bottom: 28px; }
+.auth-logo { text-align: center; margin-bottom: 24px; }
+.auth-logo-badge {
+  width: 60px; height: 60px;
+  border-radius: 50%;
+  background: var(--accent-light);
+  display: flex; align-items: center; justify-content: center;
+  margin: 0 auto 12px;
+}
 .auth-logo h1 { font-family: var(--font-display); font-size: 1.8rem; font-weight: 700; color: var(--accent); }
 .auth-logo p { color: var(--text2); font-size: 0.875rem; margin-top: 4px; }
+.auth-tabs { display: flex; gap: 4px; background: var(--bg3); border: 1px solid var(--border); border-radius: var(--radius); padding: 4px; margin-bottom: 24px; }
+.auth-tabs .tab-btn { flex: 1; text-align: center; }
 
 /* ─── Cards ─────────────────────────────────────────────────── */
 .card {
@@ -373,6 +401,40 @@ tbody tr:last-child { border-bottom: none; }
 .product-tile .p-stock { color: var(--text3); font-size: 0.72rem; margin-top: 4px; }
 .product-tile .p-cat { font-size: 0.68rem; color: var(--text3); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 6px; }
 
+/* ─── Inventory grid tile (Products page) ───────────────────── */
+.inventory-tile { position: relative; }
+.inventory-tile.low-stock { border-color: rgba(220,38,38,0.4); }
+.inventory-tile-media {
+  position: relative;
+  width: 100%; aspect-ratio: 1.3;
+  border-radius: 8px;
+  overflow: hidden;
+  margin-bottom: 10px;
+  background: var(--bg3);
+}
+.inventory-tile-media img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.inventory-tile-placeholder { width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; color: var(--text3); }
+.inventory-tile-actions {
+  position: absolute; top: 6px; right: 6px;
+  display: flex; gap: 4px;
+  opacity: 0; transition: opacity 0.15s;
+}
+.inventory-tile:hover .inventory-tile-actions,
+.inventory-tile:focus-within .inventory-tile-actions { opacity: 1; }
+.inventory-tile-badge { position: absolute; top: 6px; left: 6px; }
+.icon-btn {
+  width: 26px; height: 26px;
+  display: flex; align-items: center; justify-content: center;
+  border-radius: 50%;
+  border: none;
+  background: color-mix(in srgb, var(--bg2) 85%, transparent);
+  color: var(--text2);
+  cursor: pointer;
+  box-shadow: 0 2px 6px rgba(0,0,0,0.15);
+}
+.icon-btn:hover { background: var(--bg2); color: var(--text); }
+.icon-btn.danger:hover { background: var(--red); color: #fff; }
+
 .pos-product-list { display: flex; flex-direction: column; gap: 8px; }
 .pos-product-row {
   display: flex;
@@ -393,6 +455,53 @@ tbody tr:last-child { border-bottom: none; }
 .pos-product-meta { display: flex; gap: 8px; flex-wrap: wrap; color: var(--text3); font-size: 0.72rem; margin-top: 3px; }
 .pos-product-desc { color: var(--text2); font-size: 0.78rem; margin-top: 4px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .pos-product-price { color: var(--accent); font-family: var(--font-display); font-weight: 700; white-space: nowrap; }
+
+/* ─── POS product grid tile (card style, with quick-add button) ─ */
+.pos-tile { position: relative; padding-bottom: 40px; }
+.pos-tile .p-cat { display: flex; justify-content: space-between; align-items: center; }
+.tile-add-btn {
+  position: absolute; bottom: 10px; right: 10px;
+  width: 30px; height: 30px;
+  border-radius: 50%;
+  border: none;
+  background: var(--accent);
+  color: #fff;
+  display: flex; align-items: center; justify-content: center;
+  cursor: pointer;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+  transition: background 0.15s, transform 0.1s;
+}
+.tile-add-btn:hover { background: var(--accent2); transform: scale(1.08); }
+.tile-cart-qty {
+  position: absolute; top: 8px; right: 8px;
+  min-width: 20px; height: 20px; padding: 0 5px;
+  border-radius: 99px;
+  background: var(--accent);
+  color: #fff;
+  font-size: 0.68rem; font-weight: 700;
+  display: flex; align-items: center; justify-content: center;
+}
+
+/* ─── Quick cash shortcuts (POS payment) ────────────────────── */
+.quick-cash-row { display: flex; gap: 6px; flex-wrap: wrap; margin: 8px 0; }
+.quick-cash-btn {
+  padding: 5px 10px;
+  border-radius: 99px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  border: 1px solid var(--border);
+  background: var(--bg3);
+  color: var(--text2);
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.quick-cash-btn:hover { border-color: var(--accent); color: var(--accent); }
+
+/* ─── POS checkout button ───────────────────────────────────── */
+.pos-checkout-btn {
+  width: 100%; height: 56px;
+  font-size: 1.1rem; font-weight: 700;
+}
 
 .cart-item {
   display: grid;
@@ -1071,3 +1180,137 @@ tbody tr:last-child { border-bottom: none; }
 .info-row-value { font-size: 0.85rem; color: var(--text); word-break: break-all; }
 .info-row-value.mono { font-family: monospace; font-size: 0.78rem; }
 .info-row-copy { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+
+/* ─── Glass panel (translucent summary cards) ───────────────── */
+.glass-panel {
+  background: color-mix(in srgb, var(--bg2) 70%, transparent);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 20px;
+  box-shadow: var(--shadow);
+}
+
+/* ─── Avatar initials ────────────────────────────────────────── */
+.avatar-initials {
+  display: flex; align-items: center; justify-content: center;
+  width: 38px; height: 38px;
+  border-radius: 50%;
+  background: var(--accent-light);
+  color: var(--accent2);
+  font-weight: 700;
+  font-size: 0.8rem;
+  font-family: var(--font-display);
+  flex-shrink: 0;
+}
+.avatar-initials.sm { width: 28px; height: 28px; font-size: 0.68rem; }
+.avatar-initials.lg { width: 56px; height: 56px; font-size: 1.1rem; }
+
+/* ─── Tabs (sub-navigation, e.g. Settings Account/Staff/Preferences) ─ */
+.tabs {
+  display: flex; gap: 4px; flex-wrap: wrap;
+  background: var(--bg3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 4px;
+  margin-bottom: 20px;
+  width: fit-content;
+  max-width: 100%;
+}
+.tab-btn {
+  padding: 7px 16px;
+  border-radius: 7px;
+  border: none;
+  background: transparent;
+  color: var(--text2);
+  font-size: 0.82rem;
+  font-weight: 600;
+  font-family: var(--font-body);
+  cursor: pointer;
+  transition: all 0.15s;
+  white-space: nowrap;
+}
+.tab-btn:hover { color: var(--text); }
+.tab-btn.active { background: var(--accent); color: #fff; }
+
+/* ─── Donut chart legend (Reports) ──────────────────────────── */
+.donut-legend { display: flex; flex-direction: column; gap: 8px; }
+.donut-legend-item { display: flex; align-items: center; gap: 8px; font-size: 0.8rem; color: var(--text2); }
+.donut-legend-dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
+.donut-legend-value { margin-left: auto; font-weight: 700; color: var(--text); font-family: var(--font-display); }
+.donut-center-label { text-align: center; }
+.donut-center-label .value { font-family: var(--font-display); font-size: 1.3rem; font-weight: 700; color: var(--text); }
+.donut-center-label .label { font-size: 0.68rem; color: var(--text3); text-transform: uppercase; letter-spacing: 0.5px; }
+
+/* ─── Accordion row / receipt detail (Sales History) ────────── */
+.accordion-row { border: 1px solid var(--border); border-radius: var(--radius); margin-bottom: 8px; overflow: hidden; background: var(--bg2); }
+.accordion-row-head {
+  display: flex; align-items: center; gap: 12px;
+  padding: 12px 14px;
+  cursor: pointer;
+  transition: background 0.1s;
+}
+.accordion-row-head:hover { background: var(--bg3); }
+.accordion-row-body {
+  padding: 0 14px 16px;
+  border-top: 1px dashed var(--border);
+  margin-top: 4px;
+  padding-top: 12px;
+}
+.txn-row-main { display: flex; align-items: center; gap: 12px; width: 100%; }
+.txn-row-meta { flex: 1; min-width: 0; }
+.txn-row-title { font-weight: 700; font-size: 0.88rem; color: var(--text); }
+.txn-row-sub { font-size: 0.75rem; color: var(--text3); margin-top: 2px; display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+.txn-row-amount { text-align: right; flex-shrink: 0; }
+.txn-row-amount .amt { font-family: var(--font-display); font-weight: 700; color: var(--accent); }
+.txn-row-chevron { flex-shrink: 0; color: var(--text3); transition: transform 0.15s; }
+.accordion-row.open .txn-row-chevron { transform: rotate(180deg); }
+.receipt-detail {
+  background: radial-gradient(circle at left, transparent 6px, var(--bg2) 6.5px) left / 100% 16px repeat-y,
+              radial-gradient(circle at right, transparent 6px, var(--bg2) 6.5px) right / 100% 16px repeat-y;
+  padding: 4px 10px;
+}
+
+/* ─── Stat card decorative blob ──────────────────────────────── */
+.stat-card { position: relative; overflow: hidden; }
+.stat-card-blob {
+  position: absolute; top: -20px; right: -20px;
+  width: 80px; height: 80px;
+  border-radius: 50%;
+  background: var(--accent-light);
+  pointer-events: none;
+}
+
+/* ─── Mobile floating action button (page-level, e.g. Add Expense) ─ */
+.page-fab {
+  display: none;
+  position: fixed;
+  bottom: calc(var(--bottom-nav-h) + 16px);
+  right: 16px;
+  width: 52px; height: 52px;
+  border-radius: 50%;
+  background: var(--accent);
+  color: #fff;
+  align-items: center; justify-content: center;
+  border: none;
+  box-shadow: var(--shadow);
+  z-index: 60;
+  cursor: pointer;
+}
+.page-fab:hover { background: var(--accent2); }
+@media (max-width: 768px) { .page-fab { display: flex; } }
+
+/* ─── Dashed placeholder card (e.g. Add New Business) ────────── */
+.card-dashed {
+  border: 2px dashed var(--border2);
+  background: transparent;
+  box-shadow: none;
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: 8px;
+  color: var(--text3);
+  cursor: pointer;
+  transition: all 0.15s;
+  min-height: 180px;
+}
+.card-dashed:hover { border-color: var(--accent); color: var(--accent); background: var(--accent-light); }

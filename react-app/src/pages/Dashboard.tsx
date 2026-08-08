@@ -292,6 +292,7 @@ export default function Dashboard() {
       <div className="stats-grid">
         {statCards.map(c => (
           <div className="stat-card" key={c.label}>
+            <div className="stat-card-blob" style={{ background: c.bg }} />
             <div className="stat-icon" style={{ background: c.bg, color: c.color }}>{c.icon}</div>
             <div className="stat-label">{c.label}</div>
             <div className="stat-value" style={{ color: c.color }}>{c.value}</div>
